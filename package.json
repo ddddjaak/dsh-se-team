@@ -1,11 +1,13 @@
 {
   "name": "dsh-se-skills",
-  "description": "SE (Systems Engineer / Application Architect) workflow skills for the DeepSeek Harness (dsh): 16 skills covering Define → Design → Document → Verify → Validate, plus 6 /se-* entry commands and 5 review personas. Skills under ./skills are provider-served live; ./commands and ./agents are registered by the plugin (lib/index.js). Install with `dsh plugin --profile web add link:<this dir>` (see docs/dsh-setup.md).",
-  "version": "3.1.0",
+  "description": "SE (Systems Engineer / Application Architect) workflow skills for the DeepSeek Harness (dsh): 16 skills covering Define → Design → Document → Verify → Validate, plus 6 /se-* entry commands, 5 review personas, 3 native budget tools (se_budget_rollup / se_budget_check / se_budget_bottleneck), and locally vendored drawio / math MCP servers. Skills under ./skills are provider-served live; ./commands, ./agents and ./lib/tools are registered by the plugin (lib/index.js). Install with `dsh plugin --profile web add link:<this dir>` (see docs/dsh-setup.md).",
+  "version": "3.2.0",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
     "validate": "node scripts/validate-dsh-plugin.mjs",
+    "smoke": "node scripts/smoke-tools.mjs",
+    "verify": "npm run validate && npm run smoke",
     "fetch:mcp": "node scripts/fetch-mcp.mjs",
     "mcp:status": "node mcp/shim.mjs --list"
   },

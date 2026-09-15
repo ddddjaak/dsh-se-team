@@ -2,6 +2,67 @@
 
 All notable changes to the SE Skills project will be documented in this file.
 
+## [3.2.0] — 2026-09-15
+
+**The plugin now ships its own tools, registered natively rather than as an MCP server.** `lib/tools/`
+adds a unit-aware budget family that the Verify phase can call instead of asserting a budget is fine by
+eye. dsh's tool registry is where MCP tools land anyway, so a first-party tool registers into the same
+table through `ctx.tools.register()` — no subprocess, no JSON-RPC hop, no second schema dialect.
+
+### Added
+
+- `lib/tools/units.js` — the shared unit/dimension layer: canonical-unit table, alias normalization,
+  quantity parsing (`"≤ 500 μs"`, `"2 W"`, `"12.5 MB/s"`, `"1.5GiB"`), same-dimension conversion, and a
+  display-unit picker that chooses the largest unit keeping the value ≥ 1
+- `lib/tools/budget.js` — three tools:
+  - `se_budget_rollup` — sums allocations **by dimension**, never across them, and reports how many lines
+    carried a provenance `source` and how many were written with a comparison prefix (`<= 500 us`, which
+    understates a total)
+  - `se_budget_check` — the Verify-phase gate: per-dimension PASS/FAIL with exact headroom, the dimensions
+    that have allocations but **no ceiling at all**, and a note when a cap passes at ≥ 90% (no room for
+    the next requirement)
+  - `se_budget_bottleneck` — names the line a design change must move: the tightest ceiling, the single
+    largest consumer inside it, and top consumers per dimension as a share of their cap
+- `scripts/dsh-tool-rules.mjs` — a local replica of the registry's hard requirements (schema subset,
+  `output.render`, reserved names, output-vs-schema validation). dsh enforces these at runtime only, so
+  without a replica every mistake costs a live dsh session to find
+- `scripts/smoke-tools.mjs` (`npm run smoke`) — stubs the `skills` and `tools` services, calls `apply()`,
+  and runs all three tools over a realistic flash/power/latency budget, validating each return value
+  against that tool's own `output.schema`. Carries negative controls, so a checker that has stopped
+  checking fails the run
+- `npm run verify` — `validate` then `smoke`
+- Validator section 7: every tool definition checked against the registry rules; `npm run validate` now
+  reports the tool-definition count
+
+### Changed
+
+- `tools` reaches the plugin through `ctx.inject(['tools'], …)`, **not** the `inject` array. Requiring it
+  would mean a profile with the `tools` row disabled loses `commands/` and `agents/` too — turning a soft
+  dependency into a hard one
+- `tidy()` returns integers untouched. `toPrecision(6)` was turning a 4,306,624-byte total into
+  4,306,620 — a partition table short by four bytes
+- `unitFactor()` throws when no conversion factor exists instead of falling back to `1`
+- The rollup's display unit is picked by asking the unit layer for it, not by re-parsing formatted text
+  (`"...formatQuantity(x).split(' ')[1]"` was fragile and order-dependent)
+
+### Findings worth recording
+
+- **An alias that resolves to a dimension but not to a canonical name silently costs a factor of 10⁶.**
+  `µs` was indexed to the `time` dimension while `canonicalUnit()` kept returning `µs` instead of `us`.
+  The downstream factor lookup then read `units['µs']`, got `undefined`, and hit a
+  `Number.isFinite(x) ? x : 1` fallback — so `500 µs` became `500 s` and the wrong number flowed all the
+  way into a document. Two fixes: aliases always resolve to the canonical name, and the fallback is now a
+  throw. A "safe default" of `1` is not safe when the correct answer is `1e-6`
+- **Sharing one schema object across positions is legal; "circular" means ancestor repetition.** The first
+  version of the rules replica marked any revisited node as circular, and reported the shared
+  `SOURCE_SCHEMA` (used by both `items` and `caps`) as a defect. dsh's own implementation pushes a `leave`
+  task and deletes from `seen`, i.e. it tracks an ancestor stack. The replica now does the same, and the
+  smoke test locks both directions: shared is fine, genuinely circular is caught
+- **Byte/bit and decimal/binary ambiguity is worth an error, not a guess.** `MB`/`MiB` are decided by
+  spelling; rate units must spell the slash (`MB/s` bytes, `Mbps` bits); `MBps`-style aliases are refused
+  because they differ from `Mbps` only by case, and a bare lowercase `b` is rejected outright. Deciding
+  silently would be a factor-of-8 error in a flash budget
+
 ## [3.1.0] — 2026-09-15
 
 **Third-party MCP servers are delivered locally instead of fetched at runtime.** Every MCP row now spawns
