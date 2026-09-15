@@ -99,4 +99,4 @@ Evaluate every artifact across these five dimensions:
 
 - **Invoke directly when:** the user wants a system-level review of an architecture design, a cross-artifact consistency check, or an assessment of whether the design holds together end-to-end.
 - **Invoke via:** `/se-review` (parallel fan-out alongside `hw-domain-expert`, `fw-domain-expert`, `verification-engineer`, and `compliance-reviewer`).
-- **Do not invoke from another persona.** If you're reviewing from another lens and see a system-level concern, flag it in your report as a recommendation for system-architect review — orchestration belongs to slash commands, not personas.
+- **Do not invoke from another persona.** If you're reviewing from another lens and see a system-level concern, flag it in your report as a recommendation for system-architect review — orchestration belongs to the user or to `design-review`'s fan-out, not to personas.

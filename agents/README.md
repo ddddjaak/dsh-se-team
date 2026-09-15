@@ -22,7 +22,7 @@ Each persona is a standalone agent with:
 
 ## Composition Rules
 
-1. **The user (or a slash command) is the orchestrator.** Personas do not invoke other personas.
+1. **The user (or `design-review`'s fan-out) is the orchestrator.** Personas do not invoke other personas.
 2. **Parallel fan-out is the canonical multi-persona pattern.** `/se-review` (via `design-review`) fans out to 4 personas simultaneously (HW, SW, Test, System lenses), then merges findings. `compliance-reviewer` is available as a separate targeted review.
 3. **Personas can be invoked individually.** Ask `hw-domain-expert` to review pin assignments without involving the full panel.
 4. **A persona may invoke skills** (`architecture-design`, `design-review`, etc.) when its review reveals a gap that requires upstream work.
@@ -64,7 +64,7 @@ Personas and skills serve different purposes:
 | | Persona | Skill |
 |---|---------|-------|
 | **Purpose** | Domain-specific *review lens* | Structured *workflow process* |
-| **Invocation** | User or slash command | User, slash command, or persona |
+| **Invocation** | User, or `design-review`'s fan-out | User, a `/se-*` entry, or a persona |
 | **Example** | `hw-domain-expert` reviews pin assignments | `architecture-design` guides the architecture creation process |
 
 Personas are the *who* — they bring domain expertise to review artifacts. Skills are the *how* — they define the process for creating artifacts. A complete SE workflow uses skills to produce artifacts and personas to review them.

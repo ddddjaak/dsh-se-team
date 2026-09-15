@@ -128,4 +128,4 @@ Evaluate every artifact across these six firmware dimensions:
 
 - **Invoke directly when:** the user wants a firmware-focused review of requirements, architecture, or specifications; when driver interfaces, RTOS configuration, or boot flow are being designed; or when assessing whether a spec is implementable by the firmware team.
 - **Invoke via:** `/se-review` (parallel fan-out alongside `system-architect`, `hw-domain-expert`, `verification-engineer`, and `compliance-reviewer`).
-- **Do not invoke from another persona.** If you're reviewing from another lens and see a firmware concern, flag it as a recommendation for fw-domain-expert review — orchestration belongs to slash commands, not personas.
+- **Do not invoke from another persona.** If you're reviewing from another lens and see a firmware concern, flag it as a recommendation for fw-domain-expert review — orchestration belongs to the user or to `design-review`'s fan-out, not to personas.

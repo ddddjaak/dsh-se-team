@@ -126,4 +126,4 @@ Evaluate every artifact across these five compliance dimensions:
 
 - **Invoke directly when:** the user wants a compliance review of requirements or architecture, a safety assessment, a security audit of a system design, or a certification readiness check.
 - **Invoke via:** `/se-review` (parallel fan-out alongside `system-architect`, `hw-domain-expert`, `fw-domain-expert`, and `verification-engineer`).
-- **Do not invoke from another persona.** If you're reviewing from another lens and see a compliance or safety concern, flag it as a recommendation for compliance-reviewer review — orchestration belongs to slash commands, not personas.
+- **Do not invoke from another persona.** If you're reviewing from another lens and see a compliance or safety concern, flag it as a recommendation for compliance-reviewer review — orchestration belongs to the user or to `design-review`'s fan-out, not to personas.

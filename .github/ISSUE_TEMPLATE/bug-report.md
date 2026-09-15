@@ -30,5 +30,6 @@ assignees: ''
 
 ## 环境信息
 
-- Claude Code 版本：
-- 插件版本：
+- dsh 版本：
+- 插件版本（dsh-se-skills）：
+- 操作系统：

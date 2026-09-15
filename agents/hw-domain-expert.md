@@ -126,4 +126,4 @@ Evaluate every artifact across these six hardware dimensions:
 
 - **Invoke directly when:** the user wants a hardware-focused review of requirements, architecture, or specifications; when pin assignments, power domains, or clock trees are being defined; or when a PCB layout review is needed.
 - **Invoke via:** `/se-review` (parallel fan-out alongside `system-architect`, `fw-domain-expert`, `verification-engineer`, and `compliance-reviewer`).
-- **Do not invoke from another persona.** If you're reviewing from another lens and see a hardware concern, flag it as a recommendation for hw-domain-expert review — orchestration belongs to slash commands, not personas.
+- **Do not invoke from another persona.** If you're reviewing from another lens and see a hardware concern, flag it as a recommendation for hw-domain-expert review — orchestration belongs to the user or to `design-review`'s fan-out, not to personas.

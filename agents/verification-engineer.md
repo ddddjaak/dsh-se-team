@@ -118,4 +118,4 @@ Evaluate every artifact across these five verification dimensions:
 
 - **Invoke directly when:** the user wants a testability review of requirements, a test plan review, a traceability matrix validation, or a coverage gap analysis.
 - **Invoke via:** `/se-review` (parallel fan-out alongside `system-architect`, `hw-domain-expert`, `fw-domain-expert`, and `compliance-reviewer`).
-- **Do not invoke from another persona.** If you're reviewing from another lens and see a verification concern, flag it as a recommendation for verification-engineer review — orchestration belongs to slash commands, not personas.
+- **Do not invoke from another persona.** If you're reviewing from another lens and see a verification concern, flag it as a recommendation for verification-engineer review — orchestration belongs to the user or to `design-review`'s fan-out, not to personas.

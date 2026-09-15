@@ -26,7 +26,7 @@ This meta-skill helps you discover and apply the right skill for your current SE
 
 ## Pipeline Conduction (Automatic Phase Detection)
 
-**This is the conductor.** When invoked (either explicitly or via CLAUDE.md Pipeline Mode), you do not just discover one skill — you guide the user through the entire SE workflow, one phase at a time. After each skill completes, you return here to present the next logical step.
+**This is the conductor.** When invoked (either explicitly or via AGENTS.md Pipeline Mode), you do not just discover one skill — you guide the user through the entire SE workflow, one phase at a time. After each skill completes, you return here to present the next logical step.
 
 ### Phase Detection Protocol
 
@@ -202,10 +202,13 @@ For a complete chip application project, the typical skill sequence is:
 
 **Not every task needs every skill.** A standalone architecture review only requires `design-review`. A test report check before release only requires `test-report-review`. A gap analysis before milestone only requires `traceability-matrix`. The chain is a map, not a mandatory route — use the skills that match your current task.
 
-**Skill routing by slash command:**
+**Skill routing by `/se-*` entry skill:**
 
-| Command | Routes to |
+In dsh these are user-invocable **skills**, not a separate command plane: typing `/se-goal <goal>` in the composer injects the entry body as a user instruction. They are registered `modelInvocable: false`, so this conductor — not the entry table — is the model's own routing path. Honour an entry when the user names one; otherwise route by phase and artifact type as above.
+
+| Entry skill | Routes to |
 |---------|----------|
+| `/se-goal` | Autonomous Goal Mode — the full chain, self-correcting, human only on escalation |
 | `/se-requirements` | `requirements-decompose` |
 | `/se-architecture` | `architecture-design` → `software-architecture-design` or `hardware-architecture-design` (based on domain) |
 | `/se-spec` | `spec-authoring` → `software-detailed-design`, `hardware-detailed-design`, or `algorithm-design` (based on artifact type) |
@@ -335,7 +338,7 @@ Before completing the SE skill discovery:
 - [ ] The skill's prerequisites are satisfied (upstream artifacts exist with confirmed versions)
 - [ ] If the task spans multiple phases, the correct skill chain has been identified and communicated
 - [ ] If the artifact type is ambiguous, the user was asked to clarify before routing
-- [ ] The routed skill matches the slash command mapping table (if invoked via slash command)
+- [ ] The routed skill matches the `/se-*` entry mapping table (if the user named an entry directly)
 - [ ] No shortcuts taken — the user was not routed to a generic skill when a specialized one exists
 - [ ] The "When NOT to use" section of the target skill was read and confirmed not to apply
 
