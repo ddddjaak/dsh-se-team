@@ -2,6 +2,59 @@
 
 All notable changes to the SE Skills project will be documented in this file.
 
+## [3.1.0] — 2026-09-15
+
+**Third-party MCP servers are delivered locally instead of fetched at runtime.** Every MCP row now spawns
+one launcher shim, which prefers a vendored local copy over the `npx` / `uvx` fallback. An installed
+profile keeps working with no network access.
+
+### Added
+
+- `mcp/servers.json` — the single recipe for every third-party MCP server this package ships a row for:
+  pinned version, license, entry point, fallback runner, and (for Python) the import used to prove the
+  local copy actually loads. Version pins live here rather than in `cordis.patch.yml`, because an MCP
+  server's tool vocabulary is part of this plugin's contract and must not drift between sessions
+- `mcp/shim.mjs` — zero-dependency launcher shim. Resolves a server id to either the vendored copy or the
+  declared fallback, and exits non-zero with a diagnostic when neither works (that one row is then
+  disabled by `failOnStartupError: false`). Runs its child with `stdio: 'inherit'`, so it is a pass-through
+  parent rather than a proxy — no per-message overhead. `--list` / `--print` make it a doctor
+- `scripts/fetch-mcp.mjs` — pinned fetcher (`npm run fetch:mcp`), with `--only`, `--check`, `--clean`,
+  `--dry-run`, `--python`. Writes a `.se-skills-vendor.json` stamp recording the interpreter a local copy
+  was built from, so a mismatch is diagnosable instead of mysterious
+- `npm run mcp:status` — prints what each MCP row would actually launch
+- Validator section 6: manifest sanity (kebab ids, exact version pins, declared licenses), duplicate
+  `serverName` detection, and cross-checks that every patch row names a server in the manifest and that
+  every manifest entry is used by a row
+
+### Changed
+
+- **Track 3 rows spawn the shim, not `npx` / `uvx` directly.** `command` is now `process.execPath` — the
+  same node that runs dsh, so it always exists — with one `!!js`-resolved `args` entry pointing at
+  `mcp/shim.mjs` and one server id. The existence test that would otherwise be duplicated across
+  `command` and every `args` entry now lives in one testable file
+- **The `visio` row is disabled by default** (`disabled: true`, a real dsh entry option). It is also the
+  one row that is not vendored: upstream (`visio-mcp` on PyPI) requires Python ≥3.14 *and* a licensed
+  Microsoft Visio install driven over COM. The v2 row it replaces referenced a module (`visio_mcp_server`)
+  that does not exist on PyPI at all — it was uninstallable and unauditable. Enable the row on a machine
+  that has both prerequisites
+- `package.json`: version `3.1.0`, `mcp` added to `files` (a registry install would otherwise drop it)
+- `.gitignore`: `.mcp-vendor/` — it is build output, the recipe is in the manifest
+
+### Findings worth recording
+
+- **`pip install --target` cannot vendor pywin32, which is why Python servers get a venv.** On Windows
+  `mcp<2` depends on pywin32, and pywin32 registers its DLL directory through `.pth` files — and `.pth`
+  files are only processed for site directories the interpreter knows about, not for a `PYTHONPATH` entry.
+  `--target` therefore reports success and then fails at import with `No module named 'pywintypes'`, deep
+  inside the MCP SDK. A venv is a real site directory and additionally pins the interpreter, so the ABI
+  cannot drift from what was installed
+- **Existence is not correctness.** The first vendoring attempt passed an existence check and was still
+  broken under both interpreters available here (the build one and the system one, for two different
+  reasons). Hence the per-server `probe`: the shim imports the declared module with the local
+  environment's own interpreter before trusting it, and falls back if that fails
+- **`!!js` interpolates recursively.** The loader's `interpolate()` walks the whole config tree, so
+  `command`, any `args` entry, `env`, and `cwd` can each be an expression
+
 ## [3.0.0] — 2026-09-15
 
 **dsh-only release.** The package becomes a DeepSeek Harness (dsh) plugin and drops the Claude Code /
