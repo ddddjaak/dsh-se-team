@@ -1,11 +1,13 @@
 {
   "name": "dsh-se-skills",
   "description": "SE (Systems Engineer / Application Architect) workflow skills for the DeepSeek Harness (dsh): 16 skills covering Define → Design → Document → Verify → Validate, plus 6 /se-* entry commands and 5 review personas. Skills under ./skills are provider-served live; ./commands and ./agents are registered by the plugin (lib/index.js). Install with `dsh plugin --profile web add link:<this dir>` (see docs/dsh-setup.md).",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "validate": "node scripts/validate-dsh-plugin.mjs"
+    "validate": "node scripts/validate-dsh-plugin.mjs",
+    "fetch:mcp": "node scripts/fetch-mcp.mjs",
+    "mcp:status": "node mcp/shim.mjs --list"
   },
   "license": "MIT",
   "author": {
@@ -37,6 +39,7 @@
     "docs",
     "scripts",
     "lib",
+    "mcp",
     "cordis.patch.yml",
     "AGENTS.md",
     "CONTRIBUTING.md",

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "vendorDir": ".mcp-vendor",
+  "note": "Every third-party MCP server this plugin ships a row for. `mcp/shim.mjs` reads this file to pick a local copy or fall back to a package runner; `scripts/fetch-mcp.mjs` fills `.mcp-vendor/` from it. Versions are pinned here on purpose: an MCP server's tool vocabulary is part of this plugin's contract, so it must not drift under us between sessions.",
+  "servers": [
+    {
+      "id": "drawio",
+      "summary": "draw.io diagram generation (official jgraph MCP): Mermaid / XML / CSV in, editable .drawio out",
+      "runtime": "node",
+      "upstream": "https://registry.npmjs.org/@drawio/mcp",
+      "license": "Apache-2.0",
+      "vendored": true,
+      "fallback": {
+        "command": "npx",
+        "args": ["-y", "@drawio/mcp@1.5.0"]
+      },
+      "vendor": {
+        "kind": "npm",
+        "package": "@drawio/mcp",
+        "version": "1.5.0",
+        "entry": "node_modules/@drawio/mcp/src/index.js"
+      }
+    },
+    {
+      "id": "math",
+      "summary": "Deterministic calculator: arithmetic, unit conversion, date and calendar arithmetic",
+      "runtime": "python",
+      "upstream": "https://pypi.org/project/gnomon-mcp/",
+      "license": "MIT",
+      "vendored": true,
+      "fallback": {
+        "command": "uvx",
+        "args": ["--with", "mcp<2", "gnomon-mcp==0.1.2"]
+      },
+      "vendor": {
+        "kind": "pypi",
+        "package": "gnomon-mcp",
+        "version": "0.1.2",
+        "module": "gnomon_mcp",
+        "constraints": ["mcp<2"],
+        "probe": "gnomon_mcp.server"
+      }
+    },
+    {
+      "id": "visio",
+      "summary": "Visio .vsdx export for formal documentation",
+      "runtime": "python",
+      "upstream": "https://pypi.org/project/visio-mcp/",
+      "license": "unknown",
+      "vendored": false,
+      "optIn": true,
+      "disabledReason": "Not vendorable and not enabled by default: upstream requires Python >=3.14 and a licensed Microsoft Visio install driven over COM, neither of which can be assumed on a contributor machine. Enable the row in cordis.patch.yml only where both hold.",
+      "prerequisites": ["Windows", "Microsoft Visio installed (COM automation)", "uv / uvx on PATH"],
+      "fallback": {
+        "command": "uvx",
+        "args": ["visio-mcp"]
+      },
+      "vendor": null
+    }
+  ]
+}

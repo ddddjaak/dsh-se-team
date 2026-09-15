@@ -4,7 +4,8 @@
 #
 # Field shapes here are taken from the shipped schemas, not invented:
 #   - dsh-skill-filesystem: providerName / includeDefaultRoots / customSkillDirs
-#   - dsh-mcp-client (stdio): transport / serverName / command / args / failOnStartupError
+#   - dsh-mcp-client (stdio): transport / serverName / command / args / env /
+#     cwd / toolCallTimeoutMs / failOnStartupError
 # Unknown config keys are rejected at activation, so do not add free-form
 # fields such as `description` — document intent in comments instead.
 #
@@ -23,10 +24,21 @@
 # model's skill catalog) and the 5 review personas from `agents/` (both surfaces).
 # Edits under `commands/`, `agents/`, and `lib/` need a dsh service restart.
 #
-# Track 3 — MCP servers: the same three the multi-platform release shipped, in
-# dsh's own MCP-client form. `failOnStartupError: false` means a missing
-# npx / uvx / python disables that one server instead of failing activation, so
-# delete any row you do not want rather than expecting the host to stay up.
+# Track 3 — MCP servers: every row spawns the SAME node that runs dsh
+# (`process.execPath`) on `mcp/shim.mjs`, passing only a server id. The shim
+# reads `mcp/servers.json` and prefers a local copy under `.mcp-vendor/` (filled
+# by `node scripts/fetch-mcp.mjs`) over the npx/uvx fallback, so an installed
+# profile keeps working with no network. Version pins live in servers.json, not
+# here — one record, read by both the shim and the fetcher.
+#
+# Why a shim instead of an inline !!js ternary: the existence test would have to
+# be repeated for `command` and every `args` entry, on every row, and a failed
+# spawn reports nothing but "spawn failed". The shim is one testable place, and
+# `node mcp/shim.mjs --list` prints what each row would actually launch.
+#
+# `failOnStartupError: false` means a missing npx / uvx / python disables that
+# one server instead of failing activation, so delete any row you do not want
+# rather than expecting the host to stay up.
 - insert:
     - id: se-skills
       name: '@deepseek-ai/dsh-skill-filesystem'
@@ -46,17 +58,26 @@
       config:
         serverName: drawio
         transport: stdio
-        command: npx
-        args: ['-y', '@drawio/mcp']
+        command: !!js "process.execPath"
+        args:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/mcp/shim.mjs', baseUrl))"
+          - drawio
         failOnStartupError: false
-    # Visio .vsdx generation for formal documentation.
+    # Visio .vsdx generation for formal documentation. Disabled by default: the
+    # upstream (visio-mcp on PyPI) needs Python >=3.14 AND a licensed Microsoft
+    # Visio install driven over COM, neither of which can be assumed here. On a
+    # machine that has both, set `disabled: false`. Notably this row is the one
+    # that is NOT vendored — see mcp/servers.json for why.
     - id: mcp-visio
       name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
       config:
         serverName: visio
         transport: stdio
-        command: python
-        args: ['-c', 'from visio_mcp_server.visio_server import main; main()']
+        command: !!js "process.execPath"
+        args:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/mcp/shim.mjs', baseUrl))"
+          - visio
         failOnStartupError: false
     # Engineering calculator: SNR, power budget, thermal, timing, baud-rate error.
     - id: mcp-math
@@ -64,6 +85,12 @@
       config:
         serverName: math
         transport: stdio
-        command: uvx
-        args: ['--with', 'mcp<2', 'gnomon-mcp']
+        command: !!js "process.execPath"
+        args:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/mcp/shim.mjs', baseUrl))"
+          - math
+        # No `env` pinning needed here: for a vendored Python server the shim
+        # runs that environment's own interpreter, so the version is pinned by
+        # the venv rather than by this row. `SE_SKILLS_PYTHON` is only consulted
+        # by scripts/fetch-mcp.mjs, which decides which python builds the venv.
         failOnStartupError: false

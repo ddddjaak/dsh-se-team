@@ -9,5 +9,9 @@ docs/reviews/
 __pycache__/
 *.pyc
 
+# Vendored third-party MCP servers (mcp/servers.json is the recipe, this is the
+# build output). Materialise with `node scripts/fetch-mcp.mjs`.
+.mcp-vendor/
+
 # Agent workspace data (project memory), not project source
 .workbuddy/
