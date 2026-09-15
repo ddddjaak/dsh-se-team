@@ -12,7 +12,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const STRICT = process.argv.includes('--strict')
@@ -361,10 +361,47 @@ if (mcpManifest && patchPath && existsSync(patchPath)) {
 }
 
 // ---------------------------------------------------------------------------
+// 7. 原生工具定义：registry 的硬要求，在本地先查一遍
+// ---------------------------------------------------------------------------
+// 这些要求在本机 dsh 里是**运行期**才生效的：register() 时查 output/render/schema 子集，
+// 调用时再拿 output.schema 校验 execute 的返回值。放在这里先查，就不必先起一个 dsh 才看到报错。
+// 规则复刻的来源、以及 dsh 升级后怎么回来对齐，见 scripts/dsh-tool-rules.mjs 与
+// docs/dsh-setup.md 的「工具定义规则」一节。
+const toolDefinitions = []
+let toolRules
+try {
+  toolRules = await import(pathToFileURL(join(ROOT, 'scripts', 'dsh-tool-rules.mjs')).href)
+} catch (error) {
+  fail(`scripts/dsh-tool-rules.mjs is not importable: ${error.message}`)
+}
+
+if (toolRules) {
+  try {
+    const toolsModule = await import(pathToFileURL(join(ROOT, 'lib', 'tools', 'index.js')).href)
+    toolDefinitions.push(...(toolsModule.SE_TOOL_DEFINITIONS ?? []))
+  } catch (error) {
+    fail(`lib/tools/index.js is not importable: ${error.message}`)
+  }
+
+  if (toolDefinitions.length === 0) {
+    fail('lib/tools/index.js exports no tool definitions — the tool families would register nothing')
+  }
+  for (const definition of toolDefinitions) {
+    for (const violation of toolRules.checkToolDefinition(definition)) fail(violation)
+  }
+
+  const toolNames = toolDefinitions.map((definition) => definition.name).filter(Boolean)
+  for (const name of new Set(toolNames)) {
+    if (toolNames.filter((entry) => entry === name).length > 1) fail(`tool name "${name}" is declared twice`)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
 console.log(
-  `Checked ${collected.length} skill files (${skillEntries.length} skills, ${markdownFiles('commands').length} commands, ${markdownFiles('agents').length} agents) and ${serverIds.length} MCP server entr${serverIds.length === 1 ? 'y' : 'ies'}`,
+  `Checked ${collected.length} skill files (${skillEntries.length} skills, ${markdownFiles('commands').length} commands, ${markdownFiles('agents').length} agents), ` +
+    `${toolDefinitions.length} native tool definition(s), and ${serverIds.length} MCP server entr${serverIds.length === 1 ? 'y' : 'ies'}`,
 )
 for (const message of warnings) console.log(`  warning: ${message}`)
 for (const message of errors) console.log(`  ERROR:   ${message}`)
