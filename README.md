@@ -183,10 +183,14 @@ se-skills/                             # dsh 专用插件
 ├── agents/                            # 5 个评审角色（插件注册，两条回路）
 ├── references/                        # 21 项 SE 审查清单（按需加载）
 ├── lib/index.js                       # 插件入口：注册 commands/ 与 agents/（零依赖）
-├── cordis.patch.yml                   # dsh bundle patch：provider + 插件 + 3 个 MCP server
+├── mcp/
+│   ├── servers.json                   # 第三方 MCP server 的唯一配方（版本 / 许可 / 入口 / 回落）
+│   └── shim.mjs                       # 启动垫片：本地副本 or npx/uvx 二选一（零依赖）
+├── cordis.patch.yml                   # dsh bundle patch：provider + 插件 + MCP 行（统一走垫片）
 ├── package.json                       # dsh.bundle.patch 声明
 ├── scripts/
-│   └── validate-dsh-plugin.mjs        # 结构与契约校验器（零依赖）
+│   ├── validate-dsh-plugin.mjs        # 结构与契约校验器（零依赖）
+│   └── fetch-mcp.mjs                  # 按配方把 MCP 本地副本铺进 .mcp-vendor/（零依赖）
 ├── docs/
 │   ├── dsh-setup.md                   # dsh 安装 / 更新 / 排错
 │   ├── README.md                      # 产出物模板说明
