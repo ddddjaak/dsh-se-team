@@ -1,6 +1,10 @@
-# Contributing to SE Skills
+# Contributing to dsh-se-skills
 
-感谢你对 SE Skills 的关注！本指南说明如何贡献新技能、改进现有技能或修复问题。
+感谢你对 dsh-se-skills 的关注！本指南说明如何贡献新技能、改进现有技能或修复问题。
+
+本仓库是 **dsh 专用**插件。新增内容必须在 DeepSeek Harness 的注册机制下可被发现：`skills/` 由
+dsh-skill-filesystem provider 直供，`commands/` 与 `agents/` 由 `lib/index.js` 注册。不要引入其他
+平台的资产（插件清单、hooks、平台专有的指令文件等）—— `npm run validate` 会把它们判为错误。
 
 ## 技能质量标准
 
@@ -88,13 +92,40 @@ description: <what the skill does, third person>. Use when <trigger conditions>.
 
 ### 5. 验证
 
-验证技能的前置元数据是否符合规范：
+```bash
+npm run validate              # 结构、frontmatter、命名冲突、bundle patch
+npm run validate -- --strict  # CI：warning 也算失败
+```
 
-或者手动确认：
-- [ ] `name` 字段与目录名完全匹配
+校验器覆盖：`name` 与目录名是否一致、`name` 是否为 kebab-case、`description` 是否存在、必需章节
+是否齐全（`skills/` 为 Overview / When to Use / Verification / After This Skill；`commands/` 为
+Overview / Verification；`agents/` 为 Review Framework / Output Format / Rules）、三个目录之间是否
+重名、`using-se-skills` 的 Quick Reference 是否仍反映技能全集、bundle patch 里的 `!!js` 表达式能否
+编译。
+
+人工复查：
+
 - [ ] `description` 以第三人称描述技能功能开头，后跟 "Use when..." 触发条件
-- [ ] 所有必需章节都存在：Overview, When to Use, Process, Common Rationalizations, Red Flags, Verification
 - [ ] 所有交叉引用指向存在的技能名称
+- [ ] 若新增或删除技能，`using-se-skills` 的 Skill Discovery 流程图与 Quick Reference 表已同步
+
+## 添加入口技能或评审角色
+
+入口技能放在 `commands/<se-名称>.md`，评审角色放在 `agents/<角色名>.md`，两者都需要 frontmatter 的
+`name` 与 `description`：
+
+| 类型 | 目录 | 章节结构 | 注册策略 |
+|------|------|---------|---------|
+| `/se-*` 入口 | `commands/` | Overview → 流程 → Verification → After This Skill | `modelInvocable: false`，仅用户回路 |
+| 评审角色 | `agents/` | Review Framework → Output Format → Rules → Composition | 两条回路都放行 |
+
+写入口技能时把它当成「选一个技能 + 预先锁定该技能流程」的短文件 —— 不要在入口里复述技能正文，
+用技能名引用即可。改动 `commands/`、`agents/`、`lib/` 后需要**重启 dsh 服务**才生效；`skills/` 下的
+改动由 provider 实时提供。
+
+`lib/index.js` 必须保持**零依赖**（只允许 `node:` 内建模块）：插件以 `link:` 方式安装，node 按 realpath
+解析模块，静态 import `@deepseek-ai/*` 会在加载期直接失败。除非本包改为发布到 registry 安装，否则不要
+破坏这条约束。
 
 ## 改进现有技能
 
