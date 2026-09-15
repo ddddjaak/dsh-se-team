@@ -272,9 +272,100 @@ if (patchPath && existsSync(patchPath)) {
 }
 
 // ---------------------------------------------------------------------------
+// 6. MCP manifest, launcher shim, and the patch rows that must agree with them
+// ---------------------------------------------------------------------------
+const mcpManifestPath = join(ROOT, 'mcp', 'servers.json')
+const shimPath = join(ROOT, 'mcp', 'shim.mjs')
+if (!existsSync(shimPath)) fail('mcp/shim.mjs is missing — every MCP row spawns it')
+
+let mcpManifest
+if (!existsSync(mcpManifestPath)) {
+  fail('mcp/servers.json is missing — the MCP rows would have nothing to resolve against')
+} else {
+  try {
+    mcpManifest = JSON.parse(readFileSync(mcpManifestPath, 'utf8'))
+  } catch (error) {
+    fail(`mcp/servers.json is not valid JSON: ${error.message}`)
+  }
+}
+
+const serverIds = []
+if (mcpManifest) {
+  if (!mcpManifest.vendorDir) fail('mcp/servers.json has no "vendorDir"')
+  if (!Array.isArray(mcpManifest.servers) || mcpManifest.servers.length === 0) {
+    fail('mcp/servers.json declares no servers')
+  }
+  for (const server of mcpManifest.servers ?? []) {
+    const label = `mcp/servers.json: "${server.id ?? '(no id)'}"`
+    if (!server.id) {
+      fail('mcp/servers.json: a server entry has no "id"')
+      continue
+    }
+    serverIds.push(server.id)
+    if (!isKebabCase(server.id)) fail(`${label}: id is not kebab-case`)
+    if (!server.summary) warn(`${label} has no summary`)
+    if (!server.license) warn(`${label} does not record its license`)
+    if (!server.fallback?.command) fail(`${label} has no fallback command`)
+    if (!['node', 'python'].includes(server.runtime)) fail(`${label}: runtime must be "node" or "python"`)
+
+    if (server.vendor) {
+      const version = server.vendor.version
+      if (!version) fail(`${label}: vendor block has no pinned version`)
+      else if (/[\^~><*]/.test(version)) fail(`${label}: version "${version}" is a range — pin an exact version`)
+      if (server.vendor.kind === 'npm' && !server.vendor.entry) {
+        fail(`${label}: npm vendor block has no "entry" (the shim resolves it)`)
+      }
+      // Without a probe the shim trusts the local copy on mere existence, which
+      // is exactly how an ABI-mismatched or half-installed tree slips through.
+      if (server.vendor.kind === 'pypi' && !server.vendor.probe) {
+        warn(`${label}: Python vendor has no "probe" — the local copy is trusted on existence alone`)
+      }
+    } else if (!server.disabledReason) {
+      warn(`${label} has no vendor block and no disabledReason explaining why`)
+    }
+  }
+  const duplicateIds = serverIds.filter((id, index) => serverIds.indexOf(id) !== index)
+  for (const id of new Set(duplicateIds)) fail(`mcp/servers.json declares "${id}" twice`)
+}
+
+// The patch rows and the manifest are two halves of one contract: a row whose
+// serverName is not in the manifest makes the shim exit 64 at spawn time, and a
+// manifest entry no row uses is dead weight. Neither is visible from one file.
+if (mcpManifest && patchPath && existsSync(patchPath)) {
+  const text = readFileSync(patchPath, 'utf8')
+  const serverNames = [...text.matchAll(/^\s*serverName:\s*(\S+)\s*$/gm)].map((match) => match[1])
+  const duplicateNames = serverNames.filter((name, index) => serverNames.indexOf(name) !== index)
+  for (const name of new Set(duplicateNames)) {
+    fail(`${patchName}: serverName "${name}" is used twice — dsh rejects the duplicate at activation`)
+  }
+  for (const name of new Set(serverNames)) {
+    if (!serverIds.includes(name)) {
+      fail(`${patchName}: serverName "${name}" has no entry in mcp/servers.json — the shim would refuse to start it`)
+    }
+  }
+  for (const id of serverIds) {
+    if (!serverNames.includes(id)) warn(`${patchName}: mcp/servers.json declares "${id}" but no patch row uses it`)
+  }
+
+  // Count only live YAML: the header comments also discuss mcp/shim.mjs, and
+  // counting those would make the reference count permanently outrun the rows.
+  const shimRefs = text
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .reduce((total, line) => total + (line.match(/mcp\/shim\.mjs/g)?.length ?? 0), 0)
+  if (serverNames.length > 0 && shimRefs === 0) {
+    fail(`${patchName}: MCP rows exist but none routes through mcp/shim.mjs — the local-copy preference would never apply`)
+  } else if (shimRefs !== serverNames.length) {
+    warn(`${patchName}: ${serverNames.length} MCP row(s) but ${shimRefs} reference(s) to mcp/shim.mjs`)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
-console.log(`Checked ${collected.length} skill files (${skillEntries.length} skills, ${markdownFiles('commands').length} commands, ${markdownFiles('agents').length} agents)`)
+console.log(
+  `Checked ${collected.length} skill files (${skillEntries.length} skills, ${markdownFiles('commands').length} commands, ${markdownFiles('agents').length} agents) and ${serverIds.length} MCP server entr${serverIds.length === 1 ? 'y' : 'ies'}`,
+)
 for (const message of warnings) console.log(`  warning: ${message}`)
 for (const message of errors) console.log(`  ERROR:   ${message}`)
 
