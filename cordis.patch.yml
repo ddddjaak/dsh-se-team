@@ -28,8 +28,11 @@
 # (`process.execPath`) on `mcp/shim.mjs`, passing only a server id. The shim
 # reads `mcp/servers.json` and prefers a local copy under `.mcp-vendor/` (filled
 # by `node scripts/fetch-mcp.mjs`) over the npx/uvx fallback, so an installed
-# profile keeps working with no network. Version pins live in servers.json, not
-# here — one record, read by both the shim and the fetcher.
+# profile keeps working with no network. Pins live in servers.json, not here —
+# one record, read by both the shim and the fetcher. A row may pin a released
+# version (drawio, math, kicad) or a commit sha (regmap, whose upstream publishes
+# nowhere but GitHub); the shim does not care, because both launch as
+# `node <entry>` or a venv console script.
 #
 # Why a shim instead of an inline !!js ternary: the existence test would have to
 # be repeated for `command` and every `args` entry, on every row, and a failed
@@ -93,4 +96,39 @@
         # runs that environment's own interpreter, so the version is pinned by
         # the venv rather than by this row. `SE_SKILLS_PYTHON` is only consulted
         # by scripts/fetch-mcp.mjs, which decides which python builds the venv.
+        failOnStartupError: false
+    # Register-map lookup from ARM CMSIS-SVD files (upstream mcp-svd). Grounds
+    # register names, bit positions and addresses in the vendor's own SVD instead
+    # of in the model's recollection of the chip. Every call takes an explicit
+    # `svd_file` path — there is no implicit default — and the vendored copy ships
+    # STM32F411 / nRF52840 / rp2040 under `.mcp-vendor/regmap/node_modules/mcp-svd/svd/`;
+    # point it at your own chip's SVD for anything else.
+    - id: mcp-regmap
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: regmap
+        transport: stdio
+        command: !!js "process.execPath"
+        args:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/mcp/shim.mjs', baseUrl))"
+          - regmap
+        failOnStartupError: false
+    # KiCad schematic read/write (the `schematic` sub-server of mcp-server-kicad,
+    # 42 tools, NOT the 109-tool unified entry — a smaller tool surface costs less
+    # context and earns its place more easily). Disabled by default: it operates on
+    # `.kicad_sch` files, which a project only has once a board is actually being
+    # drawn. Note what this row is NOT: it contains no pin-conflict or
+    # pin-assignment validator, so it does not cover arch-stage pin planning.
+    # KiCad 9.x/10.x is needed only for ERC, DRC and the export tools; the other 38
+    # parse the schematic directly.
+    - id: mcp-kicad
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: kicad
+        transport: stdio
+        command: !!js "process.execPath"
+        args:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/mcp/shim.mjs', baseUrl))"
+          - kicad
         failOnStartupError: false

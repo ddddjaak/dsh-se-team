@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "vendorDir": ".mcp-vendor",
-  "note": "Every third-party MCP server this plugin ships a row for. `mcp/shim.mjs` reads this file to pick a local copy or fall back to a package runner; `scripts/fetch-mcp.mjs` fills `.mcp-vendor/` from it. Versions are pinned here on purpose: an MCP server's tool vocabulary is part of this plugin's contract, so it must not drift under us between sessions.",
+  "note": "Every third-party MCP server this plugin ships a row for. `mcp/shim.mjs` reads this file to pick a local copy or fall back to a package runner; `scripts/fetch-mcp.mjs` fills `.mcp-vendor/` from it. Versions are pinned here on purpose: an MCP server's tool vocabulary is part of this plugin's contract, so it must not drift under us between sessions. Vendor kinds: `npm` (registry tarball, exact version), `github` (git spec pinned to a commit sha — for upstreams that publish nowhere else, e.g. mcp-svd is absent from the npm registry), `pypi` (venv, exact version; run via `-m <module>` or a console `script`).",
   "servers": [
     {
       "id": "drawio",
@@ -39,6 +39,58 @@
         "module": "gnomon_mcp",
         "constraints": ["mcp<2"],
         "probe": "gnomon_mcp.server"
+      }
+    },
+    {
+      "id": "regmap",
+      "summary": "ARM CMSIS-SVD register-map lookup: peripherals, registers, bit-fields, addresses (upstream mcp-svd)",
+      "runtime": "node",
+      "upstream": "https://github.com/pkt-lab/mcp-svd",
+      "license": "MIT",
+      "vendored": true,
+      "upstreamNotes": [
+        "GitHub-only: the npm registry has no `mcp-svd` package (404), so this is the one row that pins a commit sha instead of a released version. There are no tags to pin to, and the repository is a single-author project created 2026-03-10 with one star — read it before you rely on it.",
+        "No `prepare` script, by design: the author's last commit removed it so that installing from GitHub cannot execute `tsc` on the installer's machine, and committed the built `dist/` instead. That is why vendoring needs no build step, and why there is nothing to run at install time.",
+        "MIT is declared in package.json and in the directory listings, but the repository ships no LICENSE file. Recorded as declared-MIT, not verified-MIT.",
+        "Runtime dependencies are real and must be installed: @modelcontextprotocol/sdk, express, fast-xml-parser. The committed dist/ is not self-contained — `node dist/index.js` fails on a bare checkout.",
+        "The npx fallback goes through npm's GitHub route, which downloads a codeload tarball and was then observed to stall indefinitely on the reference toolchain (no registry request, no error, >4 min, killed). Treat the fallback as the last resort it is: run `node scripts/fetch-mcp.mjs --only regmap` and use the vendored clone.",
+        "Every tool call takes an explicit `svd_file` path and there is no default. Bundled SVDs live at svd/STM32F411.svd, svd/nRF52840_xxAA.svd and svd/rp2040.svd relative to this row's vendor root; point it at your own chip's CMSIS-SVD for anything else. A chip that publishes no SVD cannot be served by this row at all."
+      ],
+      "fallback": {
+        "command": "npx",
+        "args": ["-y", "github:pkt-lab/mcp-svd#9e3956bf9634c271600f170fbf6c8ccf93dc93da"]
+      },
+      "vendor": {
+        "kind": "github",
+        "repo": "pkt-lab/mcp-svd",
+        "commit": "9e3956bf9634c271600f170fbf6c8ccf93dc93da",
+        "package": "mcp-svd",
+        "entry": "dist/index.js"
+      }
+    },
+    {
+      "id": "kicad",
+      "summary": "KiCad schematic read-write and analysis (schematic sub-server of mcp-server-kicad)",
+      "runtime": "python",
+      "upstream": "https://pypi.org/project/mcp-server-kicad/",
+      "license": "MIT",
+      "vendored": true,
+      "optIn": true,
+      "disabledReason": "Opt-in, and deliberately NOT the pin tool family. This is schematic-capture plumbing: it reads and writes `.kicad_sch` files. It contains no pin-conflict or pin-assignment validator — that concept was searched for specifically and does not exist in its tool surface. Enable the row in cordis.patch.yml when a project actually has a KiCad schematic to work on.",
+      "prerequisites": [
+        "KiCad 9.x or 10.x — only for ERC, DRC and the export tools (4 of the 42 schematic tools, which shell out to kicad-cli). The other 38 parse `.kicad_sch` directly and need no KiCad at all."
+      ],
+      "fallback": {
+        "command": "uvx",
+        "args": ["--from", "mcp-server-kicad", "mcp-server-kicad-schematic"]
+      },
+      "vendor": {
+        "kind": "pypi",
+        "package": "mcp-server-kicad",
+        "version": "0.20.1",
+        "script": "mcp-server-kicad-schematic",
+        "constraints": ["mcp>=2,<3"],
+        "probe": "mcp_server_kicad"
       }
     },
     {

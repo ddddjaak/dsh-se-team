@@ -102,6 +102,18 @@ function venvPythonPath(vendorRoot) {
     : join(vendorRoot, 'venv', 'bin', 'python')
 }
 
+/**
+ * 本地 Python 环境里一个 console script 的路径。
+ *
+ * 为什么不是所有 Python 服务器都能用 `python -m <module>` 起：pip 的 console_scripts
+ * 入口点（`mcp-server-kicad-schematic` 这类）生成的是**包装脚本**，不是可 import 的模块，
+ * 没有稳定的 `-m` 名字可用。Windows 上 pip 还会补 `.exe` 后缀，所以路径按平台分叉。
+ */
+function venvScriptPath(vendorRoot, script) {
+  const isWindows = process.platform === 'win32'
+  return join(vendorRoot, 'venv', isWindows ? 'Scripts' : 'bin', isWindows ? `${script}.exe` : script)
+}
+
 function resolvePlan(manifest, server) {
   const vendorRoot = join(PACKAGE_ROOT, manifest.vendorDir, server.id)
   const plan = {
@@ -124,13 +136,18 @@ function resolvePlan(manifest, server) {
     return plan
   }
 
-  if (server.vendor.kind === 'npm') {
+  // `github` 与 `npm` 在**启动方式**上是同一件事：都是 `node <entry 文件>`，entry 相对
+  // vendor 根解析。两者只在「怎么把这个副本铺下来」上有区别（registry tarball vs 按 sha
+  // 浅取上游工作树），而那是 `scripts/fetch-mcp.mjs` 的事。所以这里不分支，只认 entry。
+  if (server.vendor.kind === 'npm' || server.vendor.kind === 'github') {
     const entry = join(vendorRoot, server.vendor.entry)
     if (existsSync(entry)) {
       plan.mode = 'vendored'
       plan.vendored = true
       plan.command = process.execPath
       plan.args = [entry]
+      // cwd 落在 vendor 根上：上游若按相对路径取自带的数据文件（mcp-svd 的
+      // `svd_file: "svd/STM32F411.svd"` 就是这样），相对基准必须和它的安装布局一致。
       plan.cwd = vendorRoot
     } else {
       plan.problems.push(`vendored copy missing: ${entry}`)
@@ -165,10 +182,32 @@ function resolvePlan(manifest, server) {
         return plan
       }
     }
-    plan.mode = 'vendored'
-    plan.vendored = true
-    plan.command = venvPython
-    plan.args = ['-m', server.vendor.module]
+    // 入口有两种形态，取决于上游怎么发布：
+    //   - `module`（gnomon-mcp 这类）：`python -m <module>`，模块名是上游 API 的一部分；
+    //   - `script`（mcp-server-kicad 这类）：pip 生成的 console script，没有可 `-m` 的名字。
+    // 声明了 script 就**检查那个文件真的在**：pip 铺完 venv 而入口点没生成（装错包、
+    // 上游改了 entry point 名）时，`python -m mcp_server_kicad` 会以 AttributeError 之类的
+    // 面目失败，指向不了真正的原因。存在性检查在这里比 import 探测更贴近「我们要起什么」。
+    if (server.vendor.script) {
+      const scriptPath = venvScriptPath(vendorRoot, server.vendor.script)
+      if (!existsSync(scriptPath)) {
+        plan.problems.push(
+          `vendored environment has no entry point: ${scriptPath} — the console script ` +
+            `"${server.vendor.script}" was not generated. Rebuild it with ` +
+            `\`node scripts/fetch-mcp.mjs --only ${server.id}\`.`,
+        )
+        return plan
+      }
+      plan.mode = 'vendored'
+      plan.vendored = true
+      plan.command = scriptPath
+      plan.args = []
+    } else {
+      plan.mode = 'vendored'
+      plan.vendored = true
+      plan.command = venvPython
+      plan.args = ['-m', server.vendor.module]
+    }
     plan.env.PYTHONDONTWRITEBYTECODE = '1'
     plan.cwd = vendorRoot
     return plan
