@@ -9,6 +9,7 @@
 - PATH 上有 pnpm —— `dsh plugin` 命令会转发给 pnpm
 - （可选）`npx` / `uvx` / `python` —— 只有**没有** vendor 本地副本时才需要，见下文
   「第三方 MCP server 本地化」
+- （可选）`git` —— 只有 `regmap` 那一行需要：它的上游只在 GitHub 发布，没有 registry 包
 
 ## 安装
 
@@ -27,7 +28,7 @@ dsh plugin --profile web add link:D:/tags/se-skills
 | `commands/`（插件注册） | `/se-goal`、`/se-requirements`、`/se-architecture`、`/se-spec`、`/se-review`、`/se-traceability` | 输入框敲 `/` 从菜单选，或直接打 `/se-goal <目标>` |
 | `agents/`（插件注册） | `system-architect`、`hw-domain-expert`、`fw-domain-expert`、`verification-engineer`、`compliance-reviewer` | 直接装入，或作为 subagent 角色名委派 |
 | `lib/tools/`（插件注册） | 3 个原生工具：`se_budget_rollup`、`se_budget_check`、`se_budget_bottleneck` | 模型按需调用；不需要任何 MCP server 在场 |
-| `cordis.patch.yml` | drawio / math 两个 MCP server（visio 默认禁用） | 模型按需调用其工具 |
+| `cordis.patch.yml` | 5 个 MCP server（drawio / math / regmap 默认启用；kicad / visio 默认禁用） | 模型按需调用其工具 |
 
 `/se-*` 入口与评审角色都注册为 `modelInvocable: false` / `true` 两种策略：入口只走用户回路，不进驻模型
 技能目录（模型侧的路由交给 `using-se-skills`）；角色两条回路都放行。
@@ -51,7 +52,7 @@ node scripts/fetch-mcp.mjs --clean
 
 ## 第三方 MCP server 本地化（离线可用）
 
-三个第三方 MCP server **不直接**把 `npx` / `uvx` 写死成 `command`，而是统一经由 `mcp/shim.mjs` 启动：
+五个第三方 MCP server **不直接**把 `npx` / `uvx` 写死成 `command`，而是统一经由 `mcp/shim.mjs` 启动：
 
 ```yaml
 command: !!js "process.execPath"          # 跑 dsh 的那个 node，必然存在
@@ -77,11 +78,66 @@ node scripts/fetch-mcp.mjs --dry-run # 只打印将要执行的命令
 npm run mcp:status                   # 打印每行最终会启动什么（= shim --list）
 ```
 
-| server | 上游 | 钉住的版本 | 许可 | 可 vendor |
-|--------|------|-----------|------|-----------|
-| drawio | npm `@drawio/mcp` | 1.5.0 | Apache-2.0 | 是 |
-| math | PyPI `gnomon-mcp` | 0.1.2 | MIT | 是 |
-| visio | PyPI `visio-mcp` | — | 未标注 | **否** |
+**这一步要在没有文件写入限制的终端里跑。** 它会往 `.mcp-vendor/` 里解包成百上千个文件，受限沙箱下
+npm 解包会报 `EPERM: operation not permitted`，然后**挂在原地不动**（没有进一步输出、没有报错，
+实测 5 分钟以上无进展）。同一操作在不受限终端里是几十秒的事 —— 所以看到 `EPERM` + 长时间静止，
+先怀疑写入被拦，别去查网络。`regmap` 那一行还需要 `git`（见下）。
+
+| server | 上游 | 钉住的版本 | 许可 | 默认 | 可 vendor |
+|--------|------|-----------|------|------|-----------|
+| drawio | npm `@drawio/mcp` | 1.5.0 | Apache-2.0 | 启用 | 是 |
+| math | PyPI `gnomon-mcp` | 0.1.2 | MIT | 启用 | 是 |
+| regmap | GitHub `pkt-lab/mcp-svd` | commit `9e3956bf` | MIT（声称） | 启用 | 是（需 `git`） |
+| kicad | PyPI `mcp-server-kicad` | 0.20.1 | MIT | **禁用** | 是 |
+| visio | PyPI `visio-mcp` | — | 未标注 | **禁用** | **否** |
+
+配方里的 `vendor.kind` 有三种，对应上游三种发布方式。垫片只区分「怎么起」，不区分「怎么铺」，
+所以 `npm` 与 `github` 在启动上是同一件事（都是 `node <entry>`）：
+
+| kind | 铺法 | 启动 |
+|------|------|------|
+| `npm` | registry tarball，钉精确版本 | `node <entry>` |
+| `github` | 按 commit sha 浅取上游工作树，再就地从 registry 装它自己的 runtime 依赖 | `node <entry>` |
+| `pypi` | venv，钉精确版本 | `<venv python> -m <module>` 或 venv 里的 console `script` |
+
+### regmap：唯一一个按 commit 钉的行
+
+上游 `pkt-lab/mcp-svd` **不在 npm registry 上**（`registry.npmjs.org/mcp-svd` 是 404），也没有任何
+tag，所以「钉版本」只能钉 commit sha。三个必须知道的事实：
+
+- **`dist/` 已入库，没有 `prepare` 脚本。** 作者的最后一个 commit 就是专门这么改的，理由是
+  `prepare` 会在 `npm install` 时跑 `tsc` —— 等于任何从 GitHub 安装的人都能执行代码。所以铺它
+  不需要 build 步骤，安装期也不会执行任何东西。这条对我们「本地 vendoring」的威胁模型正好对症。
+- **它的 runtime 依赖是真的**，`@modelcontextprotocol/sdk` + `express` + `fast-xml-parser` 三个都要装；
+  入库的 `dist/` 不自足，裸 checkout 上 `node dist/index.js` 会失败。所以 `github` kind 铺完克隆后
+  还要装一次依赖。
+- **MIT 是「声称」而非「提供」**：`package.json` 和几个目录站都写了 MIT，但仓库里没有 LICENSE 文件。
+
+铺这一行**不要走 npm 的 GitHub 路径**（`npm install github:pkt-lab/mcp-svd#<sha>`），尽管那是上游
+README 的写法。实测 npm 会去 `codeload.github.com` 拉 tarball（这一步成功，约 2s），然后**再无任何
+进展** —— 没有 registry 请求、没有依赖解析、没有报错，`--loglevel=verbose` 也只停在那一行；
+挂了 4 分钟以上仍无变化。这个卡死发生在 npm 内部，外部看不到原因，不是这个脚本能诊断或恢复的东西。
+所以 `scripts/fetch-mcp.mjs` 自己用 git 分步取（每一步都是独立命令、退出码可查），取完**用
+`git rev-parse HEAD` 反查实际 HEAD 是否真等于钉住的 sha** —— 「我要求了这个 sha」和「这棵树就是这个
+sha」是两个不同的断言，只有后者值得写进 stamp。
+
+克隆落在 vendor 根而不是嵌在 `node_modules/` 下，顺带复现了上游自己的目录布局，于是它 README 里
+那套相对路径写法（`svd_file: "svd/STM32F411.svd"`）在这里就是对的。自带的 SVD 在
+`.mcp-vendor/regmap/svd/`（STM32F411 / nRF52840 / rp2040）；**每次调用都必须显式给 `svd_file`，
+没有默认值**，换成自己芯片的 CMSIS-SVD 即可。
+
+### kicad：默认禁用，且它**不是** pin 工具族
+
+上游 `mcp-server-kicad` 统一入口注册 109 个工具，但可以拆成 5 个子服务器；本行只起
+`mcp-server-kicad-schematic`（42 个），因为工具面越小，占的上下文越少。
+
+- 42 个里 **38 个直接读写 `.kicad_sch`，完全不需要装 KiCad**；只有 ERC / DRC / 导出那 4 个会去调
+  `kicad-cli`，需要 KiCad 9.x 或 10.x。
+- **它没有 pin 冲突检测**。schematic 子服务器里不存在 `detect_pin_conflicts` 或
+  `analyze_pin_functions` —— 这两个名字一度被当作该仓库的工具写进评估，属于误信二手摘要，核对上游
+  README 后已证伪。它是一个原理图**捕获层**工具（放置元件、连线、标网名、导出 BOM），和
+  architecture 阶段的 pin 规划不是同一层的工件：那时手里还没有 `.kicad_sch`。
+- 所以该行 `disabled: true`，**仅仅**在项目真的有一张 KiCad 原理图要处理时才启用。
 
 **visio 为什么默认禁用且不 vendor**：上游 `visio-mcp` 要求 Python ≥3.14，并且要通过 COM 驱动一个
 **装了授权许可的 Microsoft Visio**。这两条都不能在贡献者机器上假定成立，所以该行 `disabled: true`，
@@ -128,7 +184,7 @@ MCP 侧只有一句「spawn 失败」，不会告诉你「本来可以走本地�
 | 部件 | 位置 | 作用 |
 |------|------|------|
 | `package.json` | 仓库根 | 声明 `dsh.bundle.patch`，使本包成为一个 profile bundle |
-| `cordis.patch.yml` | 仓库根 | ① 插入 `se-skills` provider（id `se-skills`）到 host plane 的全局技能层；② 插入 `dsh-se-skills` 插件；③ 插入三个 MCP server 行 |
+| `cordis.patch.yml` | 仓库根 | ① 插入 `se-skills` provider（id `se-skills`）到 host plane 的全局技能层；② 插入 `dsh-se-skills` 插件；③ 插入五个 MCP server 行 |
 | `skills/` | 仓库根 | 16 个技能，由 provider 发现，原地服务 |
 | `commands/` `agents/` | 仓库根 | 由 `lib/index.js` 注册进 skill registry |
 | `lib/index.js` | `lib/` | 零依赖插件入口（见下方约束） |
@@ -223,7 +279,11 @@ dsh --profile web --dump-config
 | 看不到 `/se-*` 入口 | 它们由插件注册，改动或首次安装后必须重启 dsh 服务 |
 | 某个 MCP 的工具不见了 | 该行被单独禁用了。`npm run mcp:status` 看它解析成什么；`node scripts/fetch-mcp.mjs --check` 看本地副本在不在 |
 | 想确认走的是本地副本还是 npx | 垫片启动时往 stderr 打 `se-skills/mcp: <id>: vendored (local copy) -> ...`，在 host 日志里 grep `se-skills/mcp:` |
-| `--only <id>` 报 unknown | id 只有 `drawio` / `math` / `visio`，清单在 `mcp/servers.json` |
+| `--only <id>` 报 unknown | id 只有 `drawio` / `math` / `regmap` / `kicad` / `visio`，清单在 `mcp/servers.json` |
 | 同一个技能名出现两次 | `skills/`、`commands/`、`agents/` 三处共用一套命名空间；`npm run validate` 会报重名 |
 | 某个 `se_budget_*` 工具不见了 | 单个工具注册失败不会带走整个插件，host 日志里会有 `se-skills: tool "..." was not registered: ...`。先跑 `npm run validate`，它按同样的规则静态查一遍 |
 | 工具调用报 `ToolOutputError` | 返回结构与 `output.schema` 对不上（多一个键就会被 `additionalProperties: false` 逮到）。`npm run smoke` 会用真 registry 复现 |
+| `fetch-mcp` 报 `EPERM` 后长时间无输出 | 写入被拦。换一个没有文件写入限制的终端重跑；这不是网络问题，也不是版本问题 |
+| `regmap` 报 `checked out <x>, expected <sha>` | 取到的 HEAD 与钉住的 commit 不一致，脚本主动拒绝铺这份副本（宁可失败也不铺错的版本）。通常是镜像/代理改写了内容，或 `servers.json` 里的 commit 被改过 |
+| `kicad` 报 `has no entry point` | venv 里没生成 `mcp-server-kicad-schematic` 这个 console script —— 上游改了 entry point 名，或装到了别的包。重铺：`node scripts/fetch-mcp.mjs --only kicad --clean` |
+| `regmap` 的工具调用说找不到 SVD | 每次调用都要显式给 `svd_file`，没有默认值。自带的在 `.mcp-vendor/regmap/svd/`；自己的芯片要另外给路径。上游没有 SVD 的芯片，这一行帮不上 |

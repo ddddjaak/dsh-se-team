@@ -22,7 +22,9 @@ The plugin registers two invocation policies: `commands/` are **user-only** (`mo
 
 `lib/tools/` holds the first-party tool families and registers them **natively**, not through MCP — dsh's tool registry is where MCP tools land anyway (`dsh-mcp-client` injects `tools`), so wrapping our own tools in an MCP subprocess would add a process and a schema dialect for nothing. `tools` is a *soft* dependency: it reaches the plugin through `ctx.inject(['tools'], …)`, never the `inject` array, so a profile that disables the `tools` row still gets the skills.
 
-`mcp/` + `scripts/fetch-mcp.mjs` deliver the three third-party MCP servers (drawio / math / visio) locally: `mcp/servers.json` is the pinned recipe, `mcp/shim.mjs` is the zero-dependency launcher every patch row spawns, and `.mcp-vendor/` is the gitignored build output. See `docs/dsh-setup.md`.
+`mcp/` + `scripts/fetch-mcp.mjs` deliver the five third-party MCP servers (drawio / math / regmap / kicad / visio) locally: `mcp/servers.json` is the pinned recipe, `mcp/shim.mjs` is the zero-dependency launcher every patch row spawns, and `.mcp-vendor/` is the gitignored build output. A row pins either a released version or — for `regmap`, whose upstream publishes nowhere but GitHub — a commit sha. See `docs/dsh-setup.md`.
+
+**There is no open-source MCP server for pin-assignment or pinmux validation**, and none should be assumed the next time a hardware tool family looks missing. The ones that exist are either board-level GPIO toys, vendor-locked closed tools (NXP Pins Tool, TI SysConfig, STM32CubeMX), or a script embedded in somebody's product repository. `dtc -W all` and `dt-schema` validate syntax and bindings and explicitly do *not* catch pinmux conflicts. Treat this as an open gap, not a solved one.
 
 ### Core Rules
 
@@ -377,7 +379,7 @@ npm run smoke             # functional: really runs apply() and all three tools
 npm run verify            # both of the above
 ```
 
-The validator checks manifest wiring, every skill's frontmatter and section anatomy, name collisions, whether `using-se-skills` still reflects the catalog, whether no multi-platform asset has crept back in, the MCP manifest against the patch rows, and every native tool definition against the registry's hard requirements. It parses `cordis.patch.yml` through a dsh profile's YAML parser when one is reachable, and compiles every `!!js` expression without evaluating it.
+The validator checks manifest wiring, every skill's frontmatter and section anatomy, name collisions, whether `using-se-skills` still reflects the catalog, whether no multi-platform asset has crept back in, the MCP manifest against the patch rows, and every native tool definition against the registry's hard requirements. On the MCP side it also holds the vendor blocks to their own contract: a row must pin an exact version, or a full 40-char commit for a GitHub source, and must declare how the shim launches the local copy (`entry` for node rows, `module` or `script` for Python rows) — a row that quietly loses its launch target would otherwise only fail at spawn time, in dsh's logs. It parses `cordis.patch.yml` through a dsh profile's YAML parser when one is reachable, and compiles every `!!js` expression without evaluating it.
 
 `npm run smoke` is the one that proves the plugin *runs*: it stubs the `skills` and `tools` services, calls `apply()`, and invokes all three tools on a realistic flash/power/latency budget, validating every return value against the tool's own `output.schema`. It also carries negative controls, so a checker that has silently stopped checking fails the run instead of passing it.
 
@@ -391,6 +393,7 @@ dsh enforces the tool-definition rules at **runtime** only (at `register()` and 
 - A first-party tool goes in `lib/tools/` and registers through `ctx.tools.register()` — **not** an MCP server. Its `output` must be `{ schema, render }`, its `output.schema` must stay inside dsh's JSON Schema subset (no `$ref`/`minimum`/`pattern`; `type` as a single string; `oneOf` without `properties` siblings), and its `execute()` return value must match that schema key for key. Every returned number carries a `source` or the tool reports it as unprovenanced
 - Numbers in an SE artifact are quantified and unit-bearing (`≤ 500 us`, `≤ 2 W`). The budget tools normalize units rather than trusting the caller's arithmetic: byte vs bit and decimal vs binary are decided by how the unit is *written*, and an ambiguous spelling is an error, never a guess
 - `cordis.patch.yml` config keys must come from the shipped schemas — unknown keys are rejected at activation, so document intent in comments rather than inventing fields
+- A third-party MCP server is added in **four** places that must agree: a recipe in `mcp/servers.json` (pin, license, how to launch), a row in `cordis.patch.yml` (spawning `mcp/shim.mjs` with the server id), the vendor-kind branch in `scripts/fetch-mcp.mjs` if the launch shape is new, and the validator's checks. Pin an exact version or a full commit — never a range, never a branch — because a server's tool vocabulary is part of this plugin's contract
 - Always: every claim traces to a requirement/interface/constraint ID; quantify instead of using adjectives; follow the skill anatomy
 - Never: add skills that are vague advice instead of actionable processes; duplicate content between skills instead of referencing; proceed downstream before upstream artifacts are confirmed
 

@@ -124,6 +124,28 @@ git pull   # link 安装下 skills/ 由 provider 直供，实时生效；插件�
 
 ---
 
+## 配套的第三方 MCP server
+
+不是每种能力都值得自己写一遍 —— 能用开源方案的就装进来，而且**装到本地**。5 个行全部经由同一个垫片启动，
+优先跑 `.mcp-vendor/` 里的本地副本，所以铺好之后离线也能用：
+
+| server | 能力 | 钉的版本 | 默认 |
+|--------|------|---------|------|
+| drawio | Mermaid / XML / CSV → 可编辑 `.drawio` 图 | npm `@drawio/mcp` 1.5.0 | 启用 |
+| math | 确定性计算与单位换算 | PyPI `gnomon-mcp` 0.1.2 | 启用 |
+| regmap | ARM CMSIS-SVD 寄存器 / 位域 / 地址查询（上游 `mcp-svd`） | GitHub commit `9e3956bf` | 启用 |
+| kicad | KiCad 原理图读写与 ERC/DRC（`schematic` 子服务器，42 工具） | PyPI `mcp-server-kicad` 0.20.1 | 手动开启 |
+| visio | `.vsdx` 导出 | PyPI `visio-mcp` | 手动开启 |
+
+**pin 分配 / pinmux 冲突校验这一格目前是空的** —— 没有可安装的开源方案。能找到的要么是板级 GPIO 玩具，
+要么是厂商锁定的闭源工具（NXP Pins Tool / TI SysConfig / STM32CubeMX），要么是某个产品仓库里的内嵌脚本；
+`dtc -W all` 与 `dt-schema` 只校验语法和 binding，**明确不查 pinmux 冲突**。这是已知缺口，不是已解决项。
+（`kicad` 顶上不了：它是原理图捕获层，工具面里没有任何冲突检测器，而 SE 在架构阶段手里还没有 `.kicad_sch`。）
+
+铺本地副本：`npm run fetch:mcp`。配方与理由见 [docs/dsh-setup.md](docs/dsh-setup.md)。
+
+---
+
 ## 技能的工作原理
 
 每个技能都遵循一致的结构：
@@ -189,7 +211,7 @@ se-skills/                             # dsh 专用插件
 │       ├── budget.js                  # se_budget_rollup / _check / _bottleneck
 │       └── index.js                   # 工具族注册入口
 ├── mcp/
-│   ├── servers.json                   # 第三方 MCP server 的唯一配方（版本 / 许可 / 入口 / 回落）
+│   ├── servers.json                   # 5 个第三方 MCP server 的唯一配方（钉版本或 commit / 许可 / 入口 / 回落）
 │   └── shim.mjs                       # 启动垫片：本地副本 or npx/uvx 二选一（零依赖）
 ├── cordis.patch.yml                   # dsh bundle patch：provider + 插件 + MCP 行（统一走垫片）
 ├── package.json                       # dsh.bundle.patch 声明
