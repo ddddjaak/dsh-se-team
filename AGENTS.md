@@ -15,9 +15,14 @@ dsh is a skill-driven runtime. Skills reach agents through the `skill` tool and,
 | `skills/` | 16 | `@deepseek-ai/dsh-skill-filesystem` provider (providerName `se-skills`) | **live** — provider-served in place, no restart |
 | `commands/` | 6 | the plugin, `lib/index.js` | after a dsh service restart |
 | `agents/` | 5 | the plugin, `lib/index.js` | after a dsh service restart |
+| `lib/tools/` | 3 tools | the plugin, `lib/index.js` → `ctx.tools.register()` | after a dsh service restart |
 | `references/` | 21 | not a skill root — loaded on demand from `SKILL.md` "See Also" | live |
 
 The plugin registers two invocation policies: `commands/` are **user-only** (`modelInvocable: false`) so the six `/se-*` entry points never bloat the model's catalog, and `agents/` personas are on **both** surfaces so they can be loaded directly or delegated to as a subagent role name.
+
+`lib/tools/` holds the first-party tool families and registers them **natively**, not through MCP — dsh's tool registry is where MCP tools land anyway (`dsh-mcp-client` injects `tools`), so wrapping our own tools in an MCP subprocess would add a process and a schema dialect for nothing. `tools` is a *soft* dependency: it reaches the plugin through `ctx.inject(['tools'], …)`, never the `inject` array, so a profile that disables the `tools` row still gets the skills.
+
+`mcp/` + `scripts/fetch-mcp.mjs` deliver the three third-party MCP servers (drawio / math / visio) locally: `mcp/servers.json` is the pinned recipe, `mcp/shim.mjs` is the zero-dependency launcher every patch row spawns, and `.mcp-vendor/` is the gitignored build output. See `docs/dsh-setup.md`.
 
 ### Core Rules
 
@@ -368,15 +373,23 @@ Every skill incorporates these mechanisms:
 ```bash
 npm run validate          # errors + warnings
 npm run validate -- --strict   # CI: warnings fail too
+npm run smoke             # functional: really runs apply() and all three tools
+npm run verify            # both of the above
 ```
 
-The validator checks manifest wiring, every skill's frontmatter and section anatomy, name collisions, whether `using-se-skills` still reflects the catalog, and that no multi-platform asset has crept back in. It parses `cordis.patch.yml` through a dsh profile's YAML parser when one is reachable, and compiles every `!!js` expression without evaluating it.
+The validator checks manifest wiring, every skill's frontmatter and section anatomy, name collisions, whether `using-se-skills` still reflects the catalog, whether no multi-platform asset has crept back in, the MCP manifest against the patch rows, and every native tool definition against the registry's hard requirements. It parses `cordis.patch.yml` through a dsh profile's YAML parser when one is reachable, and compiles every `!!js` expression without evaluating it.
+
+`npm run smoke` is the one that proves the plugin *runs*: it stubs the `skills` and `tools` services, calls `apply()`, and invokes all three tools on a realistic flash/power/latency budget, validating every return value against the tool's own `output.schema`. It also carries negative controls, so a checker that has silently stopped checking fails the run instead of passing it.
+
+dsh enforces the tool-definition rules at **runtime** only (at `register()` and at call time). `scripts/dsh-tool-rules.mjs` replicates them locally so these never need a live dsh to catch; it is a replica, not an equivalence — `docs/dsh-setup.md` → 「工具定义规则」 records the authoritative source and how to re-align after a dsh upgrade.
 
 ### Conventions
 
 - Every skill lives in `skills/<name>/SKILL.md`; every skill's output is a document saved to `docs/<type>/`
 - Skills reference each other by name (`requirements-decompose`, `architecture-design`, …)
 - `lib/index.js` must stay **dependency-free** (node: builtins only). The plugin is installed with `dsh plugin add link:<dir>`, so node resolves `@deepseek-ai/*` against this repo's realpath and would fail at load time. Unless the package is published to a registry, no static import of a dsh package is allowed there
+- A first-party tool goes in `lib/tools/` and registers through `ctx.tools.register()` — **not** an MCP server. Its `output` must be `{ schema, render }`, its `output.schema` must stay inside dsh's JSON Schema subset (no `$ref`/`minimum`/`pattern`; `type` as a single string; `oneOf` without `properties` siblings), and its `execute()` return value must match that schema key for key. Every returned number carries a `source` or the tool reports it as unprovenanced
+- Numbers in an SE artifact are quantified and unit-bearing (`≤ 500 us`, `≤ 2 W`). The budget tools normalize units rather than trusting the caller's arithmetic: byte vs bit and decimal vs binary are decided by how the unit is *written*, and an ambiguous spelling is an error, never a guess
 - `cordis.patch.yml` config keys must come from the shipped schemas — unknown keys are rejected at activation, so document intent in comments rather than inventing fields
 - Always: every claim traces to a requirement/interface/constraint ID; quantify instead of using adjectives; follow the skill anatomy
 - Never: add skills that are vague advice instead of actionable processes; duplicate content between skills instead of referencing; proceed downstream before upstream artifacts are confirmed

@@ -26,6 +26,7 @@ dsh plugin --profile web add link:D:/tags/se-skills
 | `skills/`（provider 直供） | 16 个 SE 工作流技能（含 `using-se-skills` 元技能） | 模型按阶段自动路由；用户也可直接引用 |
 | `commands/`（插件注册） | `/se-goal`、`/se-requirements`、`/se-architecture`、`/se-spec`、`/se-review`、`/se-traceability` | 输入框敲 `/` 从菜单选，或直接打 `/se-goal <目标>` |
 | `agents/`（插件注册） | `system-architect`、`hw-domain-expert`、`fw-domain-expert`、`verification-engineer`、`compliance-reviewer` | 直接装入，或作为 subagent 角色名委派 |
+| `lib/tools/`（插件注册） | 3 个原生工具：`se_budget_rollup`、`se_budget_check`、`se_budget_bottleneck` | 模型按需调用；不需要任何 MCP server 在场 |
 | `cordis.patch.yml` | drawio / math 两个 MCP server（visio 默认禁用） | 模型按需调用其工具 |
 
 `/se-*` 入口与评审角色都注册为 `modelInvocable: false` / `true` 两种策略：入口只走用户回路，不进驻模型
@@ -158,11 +159,51 @@ profile 目录解析，落到指回本仓库的符号链接上。
 
 `mcp/shim.mjs` 与 `scripts/fetch-mcp.mjs` 出于同样的理由只用 `node:` 内建模块。
 
+## 工具定义规则
+
+`lib/tools/` 里的工具走**原生注册**（`ctx.tools.register()`），不经过 MCP。理由是 dsh 内部
+所有工具最终都落在同一张注册表里 —— `dsh-mcp-client` 桥接 MCP 工具时用的也是它
+（该包的 `inject = ["tools"]`）。为自研工具再套一层 MCP，只会多一个进程、一次 JSON-RPC 跳转
+和一套与 SE 无关的 schema 方言，换不到任何东西。
+
+代价是必须遵守 `register()` 的强校验。以下每一条都是**运行期**才生效的，违反即抛：
+
+| 要求 | 说明 |
+|------|------|
+| `output` 必须是 `{ schema, render }` 且 `render` 是函数 | 缺了直接 `TypeError`（`dsh-tools` register 的第一道校验） |
+| `output.schema` 只能用受限子集 | 关键字：`type` / `oneOf` / `properties` / `required` / `additionalProperties` / `items` / `enum` / `const` + 注解 `description` / `title` / `default` / `examples` |
+| 子集之外一概不支持 | 没有 `$ref` / `anyOf` / `allOf` / `minimum` / `maximum` / `pattern` / `format`；`type` 必须是单个字符串（不接受 type 数组） |
+| `oneOf` 至少两项，且不能与 `properties`/`required`/`items`/`enum`/`const` 同级 | 与 `description` 同级是允许的 |
+| `required` 必须都是已声明的 `properties` | `additionalProperties` 只能写布尔 |
+| `execute()` 的返回值会按 `output.schema` 校验 | 不符即 `ToolOutputError`。所以声明了 `additionalProperties: false` 就必须**逐键对齐** |
+| 返回值在 `render` 之前被 deepFreeze | `render` 里不得改动 `value` |
+| 工具名不能是 `run_code` | 保留给 PTC 模式的呈现通道 |
+
+**怎么确认这些规则还对得上。** `${APPDATA}/npm/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js`
+是权威来源：`CONSTRAINT_KEYWORDS` / `ANNOTATION_KEYWORDS` / `SCHEMA_TYPES` 在文件头部，
+`checkSchemaNode` 与 `register()` 在其后。本仓库把规则复刻在 `scripts/dsh-tool-rules.mjs`，
+dsh 升级后回来比一遍，两边不一致就更新复刻器（复刻不等于等价，它只覆盖上面那张表）。
+
+### 单位与量纲的约定
+
+`se_budget_*` 三兄弟共用一个横切层 `lib/tools/units.js`，其中两条是刻意的取舍：
+
+- **字节与比特按书写方式区分**：`B/KB/MB/GB` 是十进制，`KiB/MiB/GiB` 是二进制；
+  速率一律把斜杠写全（`MB/s` 是字节、`Mbps` 是比特）。**不提供 `MBps` 这类缩写别名**，
+  因为它与 `Mbps` 只差大小写，收进来就等于替调用方在 8 倍上赌一把。小写 `b` 直接报歧义。
+- **温度不参与换算**：°C↔K 是仿射关系，用「乘系数」处理会静默算错。要温度就写文本。
+
+另外，别名的解析必须落到**规范名**而不是停在别名上：`µs` 若只映射到「time 量纲」却不到 `us`，
+下游按 `units['µs']` 查系数会拿到 `undefined`，再被「拿不到系数就当 1」的兜底吞掉 ——
+`500 µs` 会静默变成 `500 s`。这个坑真实踩到过，所以 `unitFactor()` 现在拿不到系数就直接抛。
+
 ## 校验
 
 ```bash
-npm run validate              # 结构、frontmatter、命名冲突、bundle patch、MCP 配方
+npm run validate              # 结构、frontmatter、命名冲突、bundle patch、MCP 配方、工具定义
 npm run validate -- --strict  # CI：warning 也算失败
+npm run smoke                 # 功能冒烟：真跑一遍 apply() 与三个工具，含反向对照
+npm run verify                # 上面两步串起来
 ```
 
 校验器在能定位到 dsh profile 时，会用 profile 自带的 YAML 解析器真正解析一遍 `cordis.patch.yml`，
@@ -184,3 +225,5 @@ dsh --profile web --dump-config
 | 想确认走的是本地副本还是 npx | 垫片启动时往 stderr 打 `se-skills/mcp: <id>: vendored (local copy) -> ...`，在 host 日志里 grep `se-skills/mcp:` |
 | `--only <id>` 报 unknown | id 只有 `drawio` / `math` / `visio`，清单在 `mcp/servers.json` |
 | 同一个技能名出现两次 | `skills/`、`commands/`、`agents/` 三处共用一套命名空间；`npm run validate` 会报重名 |
+| 某个 `se_budget_*` 工具不见了 | 单个工具注册失败不会带走整个插件，host 日志里会有 `se-skills: tool "..." was not registered: ...`。先跑 `npm run validate`，它按同样的规则静态查一遍 |
+| 工具调用报 `ToolOutputError` | 返回结构与 `output.schema` 对不上（多一个键就会被 `additionalProperties: false` 逮到）。`npm run smoke` 会用真 registry 复现 |

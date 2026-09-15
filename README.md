@@ -182,7 +182,12 @@ se-skills/                             # dsh 专用插件
 ├── commands/                          # 6 个 /se-* 入口技能（插件注册，仅用户回路）
 ├── agents/                            # 5 个评审角色（插件注册，两条回路）
 ├── references/                        # 21 项 SE 审查清单（按需加载）
-├── lib/index.js                       # 插件入口：注册 commands/ 与 agents/（零依赖）
+├── lib/
+│   ├── index.js                       # 插件入口：注册 commands/ 与 agents/（零依赖）
+│   └── tools/                         # 原生工具族（tools.register()，不经 MCP）
+│       ├── units.js                   # 单位/量纲横切层：规范化、换算、歧义拒绝
+│       ├── budget.js                  # se_budget_rollup / _check / _bottleneck
+│       └── index.js                   # 工具族注册入口
 ├── mcp/
 │   ├── servers.json                   # 第三方 MCP server 的唯一配方（版本 / 许可 / 入口 / 回落）
 │   └── shim.mjs                       # 启动垫片：本地副本 or npx/uvx 二选一（零依赖）
@@ -190,6 +195,8 @@ se-skills/                             # dsh 专用插件
 ├── package.json                       # dsh.bundle.patch 声明
 ├── scripts/
 │   ├── validate-dsh-plugin.mjs        # 结构与契约校验器（零依赖）
+│   ├── dsh-tool-rules.mjs             # dsh tool registry 规则的本地复刻，供上下两处共用
+│   ├── smoke-tools.mjs                # 功能冒烟：真跑 apply() 与三个工具（含反向对照）
 │   └── fetch-mcp.mjs                  # 按配方把 MCP 本地副本铺进 .mcp-vendor/（零依赖）
 ├── docs/
 │   ├── dsh-setup.md                   # dsh 安装 / 更新 / 排错
