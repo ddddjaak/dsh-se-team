@@ -2,6 +2,95 @@
 
 All notable changes to the SE Skills project will be documented in this file.
 
+## [3.3.0] — 2026-09-15
+
+**The remaining SE tool families were closed by installing open source, not by writing parsers.** Two MCP
+rows were added — `regmap` (register maps from ARM CMSIS-SVD) and `kicad` (KiCad schematic read/write,
+opt-in) — and the vendor machinery grew the two launch shapes they needed: a GitHub source pinned to a
+commit, and a Python server whose entry point is a console script.
+
+The honest result on the third family is a **gap**: there is no installable open-source MCP server for
+pin-assignment or pinmux validation. That is recorded below and in `docs/dsh-setup.md` rather than papered
+over with a mismatched install.
+
+### Added
+
+- `mcp/servers.json` → `regmap` — ARM CMSIS-SVD register lookup, upstream `pkt-lab/mcp-svd` (MIT as
+  declared), pinned to commit `9e3956bf9634c271600f170fbf6c8ccf93dc93da`. Exposes 4 tools
+  (`list_peripherals`, `lookup_register`, `describe_field`, `search_registers`) that ground register
+  names, bit offsets and addresses in the vendor's own SVD file instead of in the model's recollection of
+  the chip. Bundled SVDs for STM32F411 / nRF52840 / rp2040; every call takes an explicit `svd_file`
+- `mcp/servers.json` → `kicad` — the `schematic` sub-server of `mcp-server-kicad` 0.20.1 (MIT), deliberately
+  the 42-tool sub-server and not the 109-tool unified entry. Read/write tools parse `.kicad_sch` directly;
+  only ERC / DRC / export need KiCad 9.x or 10.x. **Disabled by default** (`disabled: true`) — it is
+  schematic-capture plumbing, and a project only has a `.kicad_sch` once a board is being drawn
+- `vendor.kind: "github"` — for upstreams that publish nowhere else. A shallow `git fetch --depth 1` of one
+  commit, then a registry install of that tree's own runtime dependencies. Launches as `node <entry>`, so
+  the shim does not distinguish it from `npm`
+- `vendor.script` for `pypi` rows — pip-generated console scripts (`mcp-server-kicad-schematic`) have no
+  `-m` module name, so the shim and the fetcher resolve the entry point file in the venv instead
+- `cordis.patch.yml`: `mcp-regmap` (enabled) and `mcp-kicad` (disabled) rows, both routing through
+  `mcp/shim.mjs`
+- Validator: vendor blocks are now held to a kind-aware contract — unknown kind, missing pin, non-40-char
+  commit, missing launch target, and a fallback spec whose sha disagrees with the vendor commit all fail;
+  `pypi` rows declaring both `module` and `script` warn
+
+### Changed
+
+- `run()` in `scripts/fetch-mcp.mjs` is bounded (`SE_SKILLS_INSTALL_TIMEOUT_MS`, default 600s). `spawnSync`
+  without a timeout waits forever, and npm was observed to stall indefinitely — so a stall used to be
+  indistinguishable from patience. It now reports `killed after Ns with no progress`
+- `writeStamp()` collects the Python self-description only for Python rows and records `node` for node rows.
+  Asking a node executable to run `import sys` previously produced a parse failure that was written out as
+  a fake `python: {version: "unknown"}` block
+- `verify()` runs the import probe against the venv interpreter for every Python row, including console-script
+  ones — it was passing the launch target to the probe, which for a script row is the script, not a python
+- `scripts/fetch-mcp.mjs` header and `docs/dsh-setup.md` document the three vendor kinds and the measured
+  reason `github` does not use npm's GitHub route
+
+### Findings worth recording
+
+- **npm's GitHub route stalls, and nothing about it is diagnosable from outside.** `npm install
+  github:owner/repo#<sha>` — the route upstream's README documents — fetches the codeload tarball
+  successfully (~2s) and then makes no further progress: no registry request, no dependency resolution, no
+  error, with `--loglevel=verbose` showing nothing after that line. Observed past four minutes and killed.
+  Hence stepwise git, where each command has a checkable exit status, plus a `git rev-parse HEAD` receipt
+  proving the tree really is the pinned commit — "I asked for this sha" and "this tree is that sha" are
+  different claims, and only the second belongs in the stamp
+- **There is no open-source MCP server for pin-assignment / pinmux validation.** Searched for specifically.
+  What exists is board-level GPIO tooling, vendor-locked closed tools (NXP Pins Tool, TI SysConfig,
+  STM32CubeMX), kernel-internal debug-time self-checks (Renesas `sh_pfc`), or a script embedded in a
+  product repository (`pinmux_check.py`, ArtInChip-specific, no license, parses a compiled DTB). `dtc -W all`
+  and `dt-schema` validate syntax and bindings and explicitly do **not** catch pinmux conflicts. The layer
+  mismatch is the root cause: an SE doing architecture-stage pin planning has a pin table in a spec, not a
+  DTS, DTB or schematic, and every existing tool consumes the latter
+- **`detect_pin_conflicts` / `analyze_pin_functions` do not exist.** Those two names were carried into
+  `kicad`'s evaluation from a second-hand search summary and were wrong. Checking the upstream README, and
+  then the running sub-server's `tools/list`, confirmed it: the 42-tool surface has pin *geometry* readers
+  (`get_symbol_pins`, `get_pin_positions`), net tracing, and connect/flag writers — no conflict detector.
+  A tool name is a claim, and it needs to be traced to the tool
+- **Vendoring needs a terminal without file-write restrictions.** Under a restrictive sandbox npm's
+  extraction emits `EPERM: operation not permitted` and then hangs with no further output (observed 5+
+  minutes). The same run outside it takes tens of seconds. Recorded in the troubleshooting table, because
+  the symptom points at the network and the cause is the write path
+- **Cloning to the vendor root rather than nesting under `node_modules/` pays off twice.** It reproduces
+  upstream's own directory layout, so the relative paths its README documents (`svd_file:
+  "svd/STM32F411.svd"`) resolve against `cwd` the way the README says — verified end to end through the shim
+  (`lookup_register` on `GPIOA`/`MODER` returned offset `0x000`, absolute address `0x40020000`, reset value
+  `0xA8000000`, and the `MODE0` field). It also keeps the dependency install a plain `npm install` in a
+  tree, which is the path that works
+
+### Verified
+
+- `npm run validate` → PASS, 0 errors, 0 warnings (27 skill files, 3 native tools, 5 MCP server entries)
+- `npm run smoke` → PASS
+- All five MCP rows resolve: drawio / math / regmap / kicad `vendored`, visio `fallback`
+- `regmap` and `kicad` were launched through `mcp/shim.mjs` and completed a real MCP handshake — 4 tools and
+  42 tools respectively — rather than being trusted on "the directory exists"
+- Five negative controls on the new validator checks (bad sha, fallback/vendor sha mismatch, pypi row with
+  no launch target, unknown kind, github row without `entry`) all fired; `mcp/servers.json` was restored
+  byte-identical and re-validated
+
 ## [3.2.0] — 2026-09-15
 
 **The plugin now ships its own tools, registered natively rather than as an MCP server.** `lib/tools/`
