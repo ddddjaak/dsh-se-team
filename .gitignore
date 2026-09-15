@@ -8,3 +8,6 @@ docs/implementation-plan.md
 docs/reviews/
 __pycache__/
 *.pyc
+
+# Agent workspace data (project memory), not project source
+.workbuddy/
