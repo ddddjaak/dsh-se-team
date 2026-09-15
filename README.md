@@ -1,124 +1,64 @@
-# SE Skills
+# dsh-se-skills
 
-**面向芯片原厂 SE（系统工程师 / 应用架构师）的工作流技能。**
+**面向芯片原厂 SE（系统工程师 / 应用架构师）的 SE 工作流技能集 —— DeepSeek Harness（dsh）专用插件。**
 
-Skills 将资深系统工程师在芯片应用项目中所遵循的工作流、质量门禁和最佳实践进行编码封装，使 AI 助手能够在 SE 工作流的每个阶段 — 从原始需求分解、架构设计、规格撰写、跨部门评审到可追溯性验证 — 一致地遵循这些规范。
+Skills 把资深系统工程师在芯片应用项目中遵循的工作流、质量门禁和最佳实践编码封装，使 agent 能够在 SE 工作流的每个阶段 —— 从原始需求分解、架构设计、规格撰写、跨部门评审到可追溯性验证 —— 一致地遵循这些规范。
+
+> **本仓库是 dsh 专用分支。** 不再随附 Claude Code / Codex / 其他平台资产；多平台版本保留在 `main` 分支。
 
 ---
 
-## 命令
+## 快速开始（dsh 专用）
 
-提供 6 个斜杠命令，支持两种工作模式：**引导式（Pipeline Mode）** 和**自主式（Goal Mode）**。
+```powershell
+dsh plugin --profile web add link:<本仓库路径>
+```
 
-| 你在做什么 | 命令 | 模式 | 核心原则 |
+安装后**重启 dsh 服务**，新会话的技能目录即出现 16 个 SE 技能 + 6 个 `/se-*` 入口 + 5 个评审角色。详见 [docs/dsh-setup.md](docs/dsh-setup.md)。
+
+更新：
+
+```bash
+git pull   # link 安装下 skills/ 由 provider 直供，实时生效；插件层改动需重启 dsh 服务
+```
+
+---
+
+## 入口
+
+6 个 `/se-*` 入口，覆盖两种工作模式：**引导式（Pipeline Mode）** 和 **自主式（Goal Mode）**。
+在 dsh 里它们就是 user-invocable 技能 —— 输入框敲 `/` 从菜单选，或直接打 `/se-goal <目标>`，dsh 会把该入口的正文注入为一条 user 指令。
+
+| 你在做什么 | 入口 | 模式 | 核心原则 |
 |-------------------|---------|------|---------------|
-| 🚀 端到端全自动 SE 流程 | `/se-goal` | **自主式** | 给目标 → AI 自动跑完 Define→Design→Document→Verify→Validate，自查自修，只在真卡住时找你 |
+| 🚀 端到端全自动 SE 流程 | `/se-goal` | **自主式** | 给目标 → agent 自动跑完 Define→Design→Document→Verify→Validate，自查自修，只在真卡住时找你 |
 | 分解原始需求 | `/se-requirements` | 引导式 | 每个需求可追溯、可测试、有归属 |
 | 设计系统架构 | `/se-architecture` | 引导式 | 系统级 → HW/SW 专业架构拆分；每个接口精确定义，每个决策有据可查 |
 | 撰写正式规格和详细设计 | `/se-spec` | 引导式 | 架构 + 需求 → SOD、HW-SW IF Spec、测试方案、模块详细设计 |
 | 多类型产物评审 | `/se-review` | 引导式 | 六种评审类型覆盖全产物：设计、需求、代码、测试计划、测试报告、发布 |
 | 验证可追溯性 | `/se-traceability` | 引导式 | 跨产物差距分析，覆盖率报告 |
 
+这 6 个入口注册为 `modelInvocable: false` —— 它们是**人在回路**的快捷方式，不进驻模型技能目录。模型侧的路由由 `using-se-skills` 元技能负责。
+
 ### 两种工作模式
 
 | | Pipeline Mode（引导式） | Goal Mode（自主式） |
 |---|---|---|
 | **怎么触发** | 说"帮我做需求分解" | 说"端到端走完全流程" 或 `/se-goal` |
-| **阶段切换** | AI 展示选项，你选 | AI 自动决定下一步 |
-| **验证失败** | 报告给你 | AI 自查自修（最多重试 3 次） |
+| **阶段切换** | agent 展示选项，你选 | agent 自动决定下一步 |
+| **验证失败** | 报告给你 | 自动自查自修（最多重试 3 次） |
 | **跟你互动** | 每阶段都问 | 只在真卡住时或完成时 |
 | **适用场景** | 你想一步步把控 | 你信任流程，想省时间 |
 
-技能也会根据你正在做的事情自动激活 — 设计软件架构会触发 `software-architecture-design`，需求存在矛盾会触发 `requirements-decompose`，对测试报告有疑问会触发 `test-report-review`，以此类推。
+技能也会根据你正在做的事情自动激活 —— 设计软件架构会触发 `software-architecture-design`，需求存在矛盾会触发 `requirements-decompose`，对测试报告有疑问会触发 `test-report-review`，以此类推。
 
----
-
-## 快速开始
-
-<details>
-<summary><b>Claude Code（推荐）</b></summary>
-
-**通过 Marketplace 安装：**
-
-```
-/plugin marketplace add ddddjaak/se-skills
-/plugin install se-skills@se-skills
-```
-
-> **遇到 SSH 错误？** Marketplace 通过 SSH 克隆仓库。如果你没有在 GitHub 上设置 SSH 密钥，请先[添加 SSH 密钥](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)，或使用完整的 HTTPS URL 强制走 HTTPS 克隆：
-> ```bash
-> /plugin marketplace add https://github.com/ddddjaak/se-skills.git
-> /plugin install se-skills@se-skills
-> ```
-
-**本地 / 开发环境：**
-
-```bash
-git clone https://github.com/ddddjaak/se-skills.git
-claude --plugin-dir /path/to/se-skills
-```
-
-</details>
-
-<details>
-<summary><b>Cursor</b></summary>
-
-将任意 `SKILL.md` 复制到 `.cursor/rules/` 目录下，或引用整个 `skills/` 目录。技能是纯 Markdown 格式，可与任何支持规则文件的 AI 编码工具配合使用。
-
-</details>
-
-<details>
-<summary><b>Gemini CLI</b></summary>
-
-以原生技能方式安装，实现自动发现；或添加到 `GEMINI.md` 中以获得持久上下文。
-
-**从仓库安装：**
-
-```bash
-gemini skills install https://github.com/ddddjaak/se-skills.git --path skills
-```
-
-**从本地克隆安装：**
-
-```bash
-gemini skills install ./se-skills/skills/
-```
-
-</details>
-
-<details>
-<summary><b>Windsurf</b></summary>
-
-将技能内容添加到你的 Windsurf 规则配置中。技能是结构化的工作流，可直接作为规则文件使用。
-
-</details>
-
-<details>
-<summary><b>OpenCode</b></summary>
-
-通过 AGENTS.md 和 `skill` 工具使用基于 agent 驱动的技能执行模式。将技能目录引入即可自动发现。
-
-</details>
-
-<details>
-<summary><b>GitHub Copilot</b></summary>
-
-将技能内容放入 `.github/copilot-instructions.md` 作为持久上下文。每个 SKILL.md 都是独立的工作流，可单独或组合使用。
-
-</details>
-
-<details>
-<summary><b>Codex / 其他 Agent</b></summary>
-
-技能是纯 Markdown 格式 — 可以与任何接受系统提示或指令文件的 agent 配合使用。每个 SKILL.md 都是自包含的工作流：概览 → 触发条件 → 分步流程 → 常见合理化借口 → 红旗信号 → 验证检查清单。
-
-</details>
+> dsh 另有一个 host 级 `/goal` 命令和持久化 goal domain，能让一个任务跨轮次持续被驱动。两者互不依赖：`/se-goal` 承载 SE 链路，host `/goal` 负责让会话继续跑。长时间无人值守的 SE 跑批可以两个都开。
 
 ---
 
 ## 全部 16 个技能
 
-上述命令是入口点。本包包含 16 个 SE 工作流技能，覆盖 Define → Design → Document → Verify → Validate 全流程。每个技能专注于一个场景，包含输入验证门禁、量化指标、步骤流程和反合理化表。你也可以直接引用任何技能。
+上述入口是快捷方式。本包包含 16 个 SE 工作流技能，覆盖 Define → Design → Document → Verify → Validate 全流程。每个技能专注于一个场景，包含输入验证门禁、量化指标、步骤流程和反合理化表。你也可以直接引用任何技能。
 
 ### 元技能 — 管道引导器
 
@@ -153,26 +93,26 @@ gemini skills install ./se-skills/skills/
 
 | 技能 | 领域 | 功能 | 使用场景 |
 |-------|------|-------------|----------|
-| [design-review](skills/design-review/SKILL.md) | 系统 | 四视角（HW/SW/Test/System）对抗式审查，每位审查者独立考察同一份产物，交叉比对发现分歧。纯流程技能 — 不挂载审查清单 | 任何 SE 产物在分发前需跨部门评审；审查同事的架构或规格设计；里程碑前确认设计质量 |
+| [design-review](skills/design-review/SKILL.md) | 系统 | 四视角（HW/SW/Test/System）对抗式审查，每位审查者独立考察同一份产物，交叉比对发现分歧。纯流程技能 —— 不挂载审查清单 | 任何 SE 产物在分发前需跨部门评审；审查同事的架构或规格设计；里程碑前确认设计质量 |
 | [requirements-review](skills/requirements-review/SKILL.md) | 需求 | 基于解决方案和软件需求分析审查清单，对需求文档进行逐项审查，输出分级问题报告 | 需求文档完成，需正式审查后再进入架构设计；需求变更后需重新验证完整性和一致性 |
 | [code-static-review](skills/code-static-review/SKILL.md) | 软件 | 依据公司编码标准审查清单（6 类：代码层次/布局/注释/命名/设计/寄存器定义），对源码进行逐项合规检查 | 代码提交前需编码规范合规检查；模块代码冻结前需正式静态审查；遗留代码纳入当前编码标准 |
 | [test-plan-review](skills/test-plan-review/SKILL.md) | 测试 | 基于测试方案和测试策略审查清单，验证测试方案的完整性、可追溯性和合规性 | 测试方案完成，需正式审查后再执行测试；需求变更后需验证测试方案是否覆盖新需求 |
-| [test-report-review](skills/test-report-review/SKILL.md) | 测试 | 基于三项审查清单，验证测试报告的正确性、完整性和可追溯性 — 不仅看通过率，更看覆盖率和未测项目 | 测试完成、报告生成后需正式评审；发布前需确认测试报告无未解决的阻断项 |
-| [release-review](skills/release-review/SKILL.md) | 发布 | 发布包就绪审查 — 盘点全部产物、版本一致性校验、对照发布审查清单逐项评估，输出分级问题报告 | 发布包（固件/发布说明/版本清单/测试报告）已组装，需对外分发前评审；里程碑发布签核 |
+| [test-report-review](skills/test-report-review/SKILL.md) | 测试 | 基于三项审查清单，验证测试报告的正确性、完整性和可追溯性 —— 不仅看通过率，更看覆盖率和未测项目 | 测试完成、报告生成后需正式评审；发布前需确认测试报告无未解决的阻断项 |
+| [release-review](skills/release-review/SKILL.md) | 发布 | 发布包就绪审查 —— 盘点全部产物、版本一致性校验、对照发布审查清单逐项评估，输出分级问题报告 | 发布包（固件/发布说明/版本清单/测试报告）已组装，需对外分发前评审；里程碑发布签核 |
 
 ### 验证 — 跨产物可追溯性
 
 | 技能 | 功能 | 使用场景 |
 |-------|-------------|----------|
-| [traceability-matrix](skills/traceability-matrix/SKILL.md) | 跨产物可追溯性分析 — 需求→设计→测试的覆盖率缺口检测、孤立产物识别、过度覆盖发现、追溯报告生成 | 每个产物产出后立即验证覆盖率；里程碑评审前生成正式追溯证据；需求变更时评估影响范围 |
+| [traceability-matrix](skills/traceability-matrix/SKILL.md) | 跨产物可追溯性分析 —— 需求→设计→测试的覆盖率缺口检测、孤立产物识别、过度覆盖发现、追溯报告生成 | 每个产物产出后立即验证覆盖率；里程碑评审前生成正式追溯证据；需求变更时评估影响范围 |
 
 ---
 
-## Agent 角色
+## 评审角色
 
 用于针对性审查的预配置专业角色，覆盖 SE 工作流的五个审查视角：
 
-| Agent | 角色 | 视角 |
+| 角色 | 职责 | 视角 |
 |-------|------|-------------|
 | [system-architect](agents/system-architect.md) | 资深系统架构师 | 系统一致性、约束满足、跨域集成、风险暴露 |
 | [hw-domain-expert](agents/hw-domain-expert.md) | 硬件域专家 | 引脚分配、电源域、时钟树、信号完整性、电气合规 |
@@ -180,7 +120,7 @@ gemini skills install ./se-skills/skills/
 | [verification-engineer](agents/verification-engineer.md) | 验证质量工程师 | 可测试性、测试覆盖率、追溯完整性、验证方法论 |
 | [compliance-reviewer](agents/compliance-reviewer.md) | 合规安全审查员 | 法规合规、功能安全、安全控制、隐私、行业标准 |
 
-五个角色可以通过 `/se-review` 并行扇出（parallel fan-out），对同一份 SE 产物进行五视角对抗式审查，合并生成分类问题报告。也可以单独调用任一角色进行针对性审查。
+五个角色由 `design-review` 并行扇出，对同一份 SE 产物做五视角对抗式审查，合并生成分类问题报告；也可以单独装入任一角色做针对性审查，或作为 subagent 角色名委派。角色可以调用技能，但**不调用其他角色** —— 编排权归用户或 `design-review`。
 
 ---
 
@@ -203,6 +143,7 @@ gemini skills install ./se-skills/skills/
 │  常见合理化借口   → 借口 + 反驳                 │
 │  红旗信号         → 出问题的迹象                │
 │  验证             → 证据要求                    │
+│  After This Skill → 上游/下游衔接               │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -211,18 +152,18 @@ gemini skills install ./se-skills/skills/
 - **是流程，不是散文。** 技能是 agent 遵循的工作流，不是让他们阅读的参考文档。每个技能都有步骤、检查点和退出标准。
 - **一个技能 = 一个场景。** 16 个技能按职责精确拆分，每个技能专注一个场景（如 `software-detailed-design` 只设计一个固件模块），上下文干净、输入文档最多 2-3 项。
 - **反合理化。** 每个技能都包含一个常见借口表，列出 agent 用来跳过步骤的借口（例如 "需求大概清楚了，直接开始设计吧"），并附有文档化的反驳。
-- **验证不容妥协。** 每个技能都以证据要求结尾 — 冲突解决日志、接口完整性检查清单、人类确认门禁。"看起来没问题" 永远不够。
+- **验证不容妥协。** 每个技能都以证据要求结尾 —— 冲突解决日志、接口完整性检查清单、人类确认门禁。"看起来没问题" 永远不够。
 - **渐进式披露。** `SKILL.md` 是入口点，每个控制在 500 行以内。详细审查清单放在 `references/` 目录（21 项 SE 审查清单），由技能通过 "See Also" 按需加载，不撑爆上下文。
-- **独立可组合。** 技能可以端到端串联（需求→架构→详细设计→评审→追溯），也可以独立使用 — 单跑 `design-review` 审查同事的产物，或单跑 `traceability-matrix` 做里程碑前的覆盖率检查。
+- **独立可组合。** 技能可以端到端串联（需求→架构→详细设计→评审→追溯），也可以独立使用 —— 单跑 `design-review` 审查同事的产物，或单跑 `traceability-matrix` 做里程碑前的覆盖率检查。
 
 ---
 
 ## 项目结构
 
 ```
-se-skills/
-├── skills/                            # 16 个 SE 工作流技能
-│   ├── using-se-skills/               #   元技能：如何使用本包
+se-skills/                             # dsh 专用插件
+├── skills/                            # 16 个 SE 工作流技能（provider 直供，实时生效）
+│   ├── using-se-skills/               #   元技能：管道引导器
 │   ├── requirements-decompose/        #   定义：原始输入 → 结构化需求
 │   ├── requirements-review/           #   验证：需求文档清单审查
 │   ├── architecture-design/           #   设计：系统级模块分解
@@ -238,34 +179,35 @@ se-skills/
 │   ├── test-report-review/            #   验证：测试报告正确性审查
 │   ├── release-review/                #   验证：发布就绪审查
 │   └── traceability-matrix/           #   验证：跨产物可追溯性分析
-├── agents/                            # 5 个专业审查角色
+├── commands/                          # 6 个 /se-* 入口技能（插件注册，仅用户回路）
+├── agents/                            # 5 个评审角色（插件注册，两条回路）
 ├── references/                        # 21 项 SE 审查清单（按需加载）
-├── .github/                           # Issue/PR 模板
-├── .claude-plugin/                    # 插件清单
-│   ├── plugin.json
-│   └── marketplace.json
-├── .claude/commands/                  # 6 个斜杠命令（Claude Code）
-│   ├── se-goal.md                     #   自主式：端到端全自动 SE 流程
-│   ├── se-requirements.md
-│   ├── se-architecture.md
-│   ├── se-spec.md
-│   ├── se-review.md
-│   └── se-traceability.md
-├── docs/                              # 产出物模板和参考文档
-├── AGENTS.md                          # AI Agent 指令文件
-├── CLAUDE.md                          # 仓库结构指南
+├── lib/index.js                       # 插件入口：注册 commands/ 与 agents/（零依赖）
+├── cordis.patch.yml                   # dsh bundle patch：provider + 插件 + 3 个 MCP server
+├── package.json                       # dsh.bundle.patch 声明
+├── scripts/
+│   └── validate-dsh-plugin.mjs        # 结构与契约校验器（零依赖）
+├── docs/
+│   ├── dsh-setup.md                   # dsh 安装 / 更新 / 排错
+│   ├── README.md                      # 产出物模板说明
+│   └── versions.json                  # 管道状态（阶段检测的权威来源）
+├── AGENTS.md                          # 仓库指南 + 运行时行为定义（Pipeline/Goal Mode）
 ├── CONTRIBUTING.md                    # 贡献指南
 ├── CHANGELOG.md                       # 变更日志
 └── LICENSE                            # MIT
 ```
 
+`AGENTS.md` 在 dsh 下是双重身份：它既是指南，也会被 `dsh-agent-instructions` 作为工作区指令注入 prompt ——
+Pipeline Mode 的触发词、阶段检测、执行协议、Goal Mode 的自动选技能规则和自修协议都定义在那里。
+这也是本仓库只有一个指令文件的原因：dsh 会同时加载两个约定文件名，两份并存等于把同一套规则注入两遍。
+
 ---
 
 ## 为什么需要 SE Skills？
 
-AI 编程助手默认走最短路径 — 在系统工程师的工作中，这往往意味着跳过需求分解直接开始"设计"、用 "I2C" 三个字母代替完整的接口规格、默默解决需求矛盾而不追问、或者生成充满空章节的规格文档。
+AI 编程助手默认走最短路径 —— 在系统工程师的工作中，这往往意味着跳过需求分解直接开始"设计"、用 "I2C" 三个字母代替完整的接口规格、默默解决需求矛盾而不追问、或者生成充满空章节的规格文档。
 
-芯片应用项目中的错误发现越晚，修复成本越高 — 需求阶段的歧义用一次对话就能澄清，集成阶段才发现架构假设错误则需要数周返工。
+芯片应用项目中的错误发现越晚，修复成本越高 —— 需求阶段的歧义用一次对话就能澄清，集成阶段才发现架构假设错误则需要数周返工。
 
 每个技能都编码了资深 SE 来之不易的工程判断。16 个技能按职责精确拆分，每个技能专注于一个场景，上下文窗口干净、引用清单精准：
 
@@ -289,7 +231,7 @@ AI 编程助手默认走最短路径 — 在系统工程师的工作中，这往
 | **TBD 管理** | 每个 TBD 必须有 owner + due date，不接受裸 TBD |
 | **版本检查** | 每个技能交叉验证输入产物版本一致性，版本偏移作为 CRITICAL 上报 |
 
-这些不是泛泛的提示词 — 它们是那种有见地的、以流程为导向的工作流，能够区分经过工程验证的系统设计和拍脑袋的原型方案。
+这些不是泛泛的提示词 —— 它们是那种有见地的、以流程为导向的工作流，能够区分经过工程验证的系统设计和拍脑袋的原型方案。
 
 ---
 
@@ -297,7 +239,10 @@ AI 编程助手默认走最短路径 — 在系统工程师的工作中，这往
 
 技能应该 **具体**（可操作的步骤，而非模糊的建议）、**可验证**（明确的退出标准和证据要求）、**经过实战检验**（基于真实 SE 工作流）以及 **精简**（只包含引导 agent 所需的内容）。
 
-每个技能遵循标准格式：YAML 前置元数据（name, description）→ 概览 → 使用场景 → 分步流程 → 与其他技能的交互 → 常见合理化借口 → 红旗信号 → 验证检查清单。
+```bash
+npm run validate              # 校验结构、frontmatter、命名冲突、bundle patch
+npm run validate -- --strict  # CI：warning 也算失败
+```
 
 详见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解完整的贡献指南、技能格式规范和 PR 流程。
 

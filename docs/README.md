@@ -10,7 +10,7 @@ SE 技能会将产出物保存到以下子目录（由技能在工作流中自�
 docs/
 ├── README.md                        # 本文件
 ├── versions.json                    # 产物版本清单（跨会话恢复）
-├── v2-release-notes.md              # v2 更新说明
+├── dsh-setup.md                     # dsh 安装 / 更新 / 排错
 ├── requirements/                    # requirements-decompose 产出
 │   └── [project]-system-requirements.md
 ├── architecture/                    # architecture-design / software-architecture-design / hardware-architecture-design 产出
@@ -52,4 +52,4 @@ docs/
 | 阶段切换 | 展示选项，你选 | AI 自动决定 |
 | 进度追踪 | 手动 | versions.json 自动更新 |
 
-详见 [v2-release-notes.md](v2-release-notes.md)。
+安装与配置见 [dsh-setup.md](dsh-setup.md)，变更历史见 [../CHANGELOG.md](../CHANGELOG.md)。
