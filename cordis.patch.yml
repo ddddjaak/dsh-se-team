@@ -1,0 +1,69 @@
+# dsh-se-skills bundle patch — dual-track registration for the dsh web profile.
+# Applied as a profile bundle layer (the `dsh.bundle.patch` manifest field);
+# activate with `dsh plugin --profile web add link:D:/tags/se-skills`.
+#
+# Field shapes here are taken from the shipped schemas, not invented:
+#   - dsh-skill-filesystem: providerName / includeDefaultRoots / customSkillDirs
+#   - dsh-mcp-client (stdio): transport / serverName / command / args / failOnStartupError
+# Unknown config keys are rejected at activation, so do not add free-form
+# fields such as `description` — document intent in comments instead.
+#
+# Track 1 — skills provider: a bare `@deepseek-ai/dsh-skill-filesystem` provider
+# with a distinct providerName and `includeDefaultRoots: false`, so it contributes
+# ONLY this package's `skills/` directory (16 SE workflow skills) and nothing
+# else — not the project's `.dsh/skills`, not the user's `~/.dsh/skills`. It
+# registers into the host plane's global skill layer, so every agent on every
+# preset sees the merged catalog. `baseUrl` inside the !!js expression is the
+# profile directory (~/.dsh/profiles/web), so the path resolves through the
+# profile's node_modules symlink straight back into this package — skills are
+# served in place, no copies, and edits under `skills/` are live.
+#
+# Track 2 — plugin: the dsh-se-skills plugin (lib/index.js) registers the 6
+# `/se-*` entry skills from `commands/` (user-facing only — they never enter the
+# model's skill catalog) and the 5 review personas from `agents/` (both surfaces).
+# Edits under `commands/`, `agents/`, and `lib/` need a dsh service restart.
+#
+# Track 3 — MCP servers: the same three the multi-platform release shipped, in
+# dsh's own MCP-client form. `failOnStartupError: false` means a missing
+# npx / uvx / python disables that one server instead of failing activation, so
+# delete any row you do not want rather than expecting the host to stay up.
+- insert:
+    - id: se-skills
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: se-skills
+        includeDefaultRoots: false
+        customSkillDirs:
+          - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-se-skills/skills/', baseUrl))"
+- insert:
+    - id: dsh-se-skills
+      name: 'dsh-se-skills'
+- insert:
+    # draw.io diagram generation (official jgraph MCP). Windows: if the child
+    # fails to spawn, change `npx` to `npx.cmd`.
+    - id: mcp-drawio
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: drawio
+        transport: stdio
+        command: npx
+        args: ['-y', '@drawio/mcp']
+        failOnStartupError: false
+    # Visio .vsdx generation for formal documentation.
+    - id: mcp-visio
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: visio
+        transport: stdio
+        command: python
+        args: ['-c', 'from visio_mcp_server.visio_server import main; main()']
+        failOnStartupError: false
+    # Engineering calculator: SNR, power budget, thermal, timing, baud-rate error.
+    - id: mcp-math
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: math
+        transport: stdio
+        command: uvx
+        args: ['--with', 'mcp<2', 'gnomon-mcp']
+        failOnStartupError: false
