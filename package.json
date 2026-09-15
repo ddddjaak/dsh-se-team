@@ -15,10 +15,10 @@
   "author": {
     "name": "ddddjaak"
   },
-  "homepage": "https://github.com/ddddjaak/se-skills",
+  "homepage": "https://github.com/ddddjaak/dsh-se-team",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ddddjaak/se-skills.git"
+    "url": "git+https://github.com/ddddjaak/dsh-se-team.git"
   },
   "keywords": [
     "dsh-plugin",
