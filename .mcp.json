@@ -12,7 +12,7 @@
     },
     "math": {
       "command": "uvx",
-      "args": ["gnomon-mcp"],
+      "args": ["--with", "mcp<2", "gnomon-mcp"],
       "description": "Engineering calculator — Python math expressions, unit conversion (Pint), date/calendar. For MCU datasheet: SNR, power budget, thermal, timing, baud rate error."
     }
   }
