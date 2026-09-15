@@ -309,16 +309,57 @@ if (mcpManifest) {
     if (!['node', 'python'].includes(server.runtime)) fail(`${label}: runtime must be "node" or "python"`)
 
     if (server.vendor) {
-      const version = server.vendor.version
-      if (!version) fail(`${label}: vendor block has no pinned version`)
-      else if (/[\^~><*]/.test(version)) fail(`${label}: version "${version}" is a range — pin an exact version`)
-      if (server.vendor.kind === 'npm' && !server.vendor.entry) {
-        fail(`${label}: npm vendor block has no "entry" (the shim resolves it)`)
+      const kind = server.vendor.kind
+      // A GitHub row pins a commit; a registry/PyPI row pins a version. Neither
+      // may be a range, because the tool vocabulary a server exposes is part of
+      // this plugin's contract and must not drift between sessions.
+      const pin = kind === 'github' ? server.vendor.commit : server.vendor.version
+      if (!['npm', 'github', 'pypi'].includes(kind)) {
+        fail(`${label}: unknown vendor kind "${kind}" — the shim, the fetcher and this check must agree on the set`)
+      } else if (!pin) {
+        fail(`${label}: vendor block has no pin (${kind === 'github' ? '"commit"' : '"version"'})`)
+      } else if (kind === 'github') {
+        if (!/^[0-9a-f]{40}$/.test(pin)) {
+          fail(`${label}: commit "${pin}" is not a full 40-char sha — a branch or abbreviated sha can move under us`)
+        }
+        if (!/^[\w.-]+\/[\w.-]+$/.test(server.vendor.repo ?? '')) {
+          fail(`${label}: github vendor block has no "repo" of the form owner/name`)
+        }
+        // The sha is written in two places (the vendor block the fetcher reads,
+        // and the npx spec the shim falls back to). They drifting apart would be
+        // invisible until someone ran the offline-less path and got a different
+        // server than the one this file claims to pin.
+        const spec = (server.fallback?.args ?? []).find(
+          (arg) => typeof arg === 'string' && arg.startsWith('github:'),
+        )
+        if (!spec) {
+          warn(`${label}: github row's fallback has no github: spec, so the online path would run something else`)
+        } else if (!spec.endsWith(`#${pin}`)) {
+          fail(`${label}: fallback spec "${spec}" and vendor commit "${pin}" disagree — one of them is stale`)
+        }
+      } else if (/[\^~><*]/.test(pin)) {
+        fail(`${label}: version "${pin}" is a range — pin an exact version`)
       }
-      // Without a probe the shim trusts the local copy on mere existence, which
-      // is exactly how an ABI-mismatched or half-installed tree slips through.
-      if (server.vendor.kind === 'pypi' && !server.vendor.probe) {
-        warn(`${label}: Python vendor has no "probe" — the local copy is trusted on existence alone`)
+
+      // How the shim launches a local copy depends on the kind: `node <entry>`
+      // for npm/github, and either `-m <module>` or a venv console `script` for
+      // pypi. Whichever shape applies, the launch target must be declared here —
+      // the shim has nowhere else to get it.
+      if ((kind === 'npm' || kind === 'github') && !server.vendor.entry) {
+        fail(`${label}: ${kind} vendor block has no "entry" (the shim resolves it)`)
+      }
+      if (kind === 'pypi') {
+        if (!server.vendor.script && !server.vendor.module) {
+          fail(`${label}: pypi vendor block declares neither "module" nor "script" — there is nothing to launch`)
+        }
+        if (server.vendor.script && server.vendor.module) {
+          warn(`${label}: pypi vendor block declares both "module" and "script" — the shim launches "script"`)
+        }
+        // Without a probe the shim trusts the local copy on mere existence, which
+        // is exactly how an ABI-mismatched or half-installed tree slips through.
+        if (!server.vendor.probe) {
+          warn(`${label}: Python vendor has no "probe" — the local copy is trusted on existence alone`)
+        }
       }
     } else if (!server.disabledReason) {
       warn(`${label} has no vendor block and no disabledReason explaining why`)
