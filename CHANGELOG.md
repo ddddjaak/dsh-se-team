@@ -2,6 +2,77 @@
 
 All notable changes to the SE Skills project will be documented in this file.
 
+## [3.0.0] — 2026-09-15
+
+**dsh-only release.** The package becomes a DeepSeek Harness (dsh) plugin and drops the Claude Code /
+Codex multi-platform layer. The multi-platform version stays on `main`; this is a separate branch.
+
+### Added
+
+**dsh plugin surface:**
+
+- `package.json` — declares `dsh.bundle.patch`, `type: module`, `main: lib/index.js`, and a
+  `npm run validate` script, so the package loads as a dsh profile bundle
+- `cordis.patch.yml` — three-track bundle patch:
+  - Track 1: a `@deepseek-ai/dsh-skill-filesystem` provider (`providerName: se-skills`,
+    `includeDefaultRoots: false`) that serves **only** this package's `skills/`, resolved through the
+    profile's `node_modules` symlink via `!!js`, so skills are served in place and edits are live
+  - Track 2: the `dsh-se-skills` plugin row
+  - Track 3: the three MCP servers carried over from the multi-platform release, re-expressed as
+    `@deepseek-ai/dsh-mcp-client` stdio rows (drawio / visio / math) with `failOnStartupError: false`
+- `lib/index.js` — zero-dependency (node: builtins only) plugin entry registering:
+  - `commands/` as **user-only** entry skills (`modelInvocable: false`)
+  - `agents/` as review personas on both surfaces
+  - Dependency-free by necessity: a `link:` install resolves `@deepseek-ai/*` against this repo's
+    realpath, so a static import would fail at load time
+- `commands/` — the 6 slash commands converted to dsh user-invocable skills (`se-goal`,
+  `se-requirements`, `se-architecture`, `se-spec`, `se-review`, `se-traceability`). In dsh a
+  user-invocable skill *is* the slash entry (`/name` injects the body), so no Claude Code command
+  directory is needed. Bodies gained `name` frontmatter, and the Claude Code plugin namespace
+  (`se-skills:<skill>`) was replaced with bare skill names
+- `scripts/validate-dsh-plugin.mjs` — zero-dependency validator: manifest wiring, per-surface section
+  anatomy, name collisions, `using-se-skills` staleness, multi-platform asset regression, and a real
+  parse of the bundle patch (including compiling every `!!js` expression without evaluating it)
+- `docs/dsh-setup.md` — install / update / uninstall / troubleshooting, plus why each track exists
+
+### Changed
+
+- **`AGENTS.md` is now the single instruction authority.** The Pipeline Mode and Goal Mode runtime
+  rules that lived in `CLAUDE.md` are folded in. This matters for correctness, not tidiness:
+  `dsh-agent-instructions` loads both `AGENTS.md` and `CLAUDE.md` from the project root, and only
+  de-duplicates files whose content matches exactly — two divergent files would inject the same rules
+  twice. Merged size 26 KB against the 65,536-byte injection budget
+- `README.md` rewritten for dsh: install via `dsh plugin --profile web add link:<dir>`, `/se-*` entry
+  table, and a project structure reflecting the new layout
+- `CONTRIBUTING.md`: dsh framing, an entry-skill / persona contribution section, and the zero-dependency
+  constraint on `lib/index.js`. Also fixed a pre-existing dangling sentence — the validation step
+  introduced a check list with nothing after the colon
+- `skills/using-se-skills/SKILL.md`: conductor reference points at `AGENTS.md`; the routing table is
+  described as `/se-*` entry skills rather than slash commands
+- `agents/README.md` and all 5 personas: "orchestration belongs to slash commands" reworded to the user
+  or `design-review`'s fan-out
+- `.github/ISSUE_TEMPLATE/bug-report.md`: environment fields now ask for the dsh version and OS
+- `docs/README.md`: replaced a dangling link to the gitignored `v2-release-notes.md`
+- `.gitignore`: dropped the `.claude/` and `docs/v2-release-notes.md` entries
+
+### Removed
+
+Multi-platform assets, all superseded by the dsh equivalents above:
+
+- `CLAUDE.md` — content merged into `AGENTS.md`
+- `.claude-plugin/` (`plugin.json`, `marketplace.json`)
+- `.claude/commands/` (6 commands) — converted into `commands/` as dsh skills
+- `.codex-plugin/plugin.json`
+- `hooks/` (`hooks.json`, `hooks.codex.json`, `session-start.sh`, `session-start-windows.ps1`) — dsh
+  injects `AGENTS.md` as workspace instruction context, so the meta-skill injection hook has no dsh role
+- `.mcp.json` — the three servers now live in `cordis.patch.yml`
+
+### Verified
+
+- `npm run validate` → PASS, 0 errors, 0 warnings (27 skill files: 16 skills + 6 commands + 5 personas)
+- `node --check lib/index.js` clean; `cordis.patch.yml` parses through a dsh profile's YAML parser with
+  the `!!js` tag resolved, and every `!!js` expression compiles
+
 ## [Unreleased]
 
 ### Added
